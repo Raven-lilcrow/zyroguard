@@ -1,0 +1,40 @@
+services:
+  zyroguard:
+    build: .
+    container_name: zyroguard
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_PATH: /data/zyroguard.db
+      RULES_PATH: /app/zyroguard/rules.yaml
+    volumes:
+      - zyroguard-data:/data
+      - ./zyroguard/rules.yaml:/app/zyroguard/rules.yaml:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 1g   # the meaning-match model needs ~300 MB
+    cpus: "1.0"
+    pids_limit: 200
+    stop_grace_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    networks:
+      - n8n_default
+    # Internal API for n8n only. Do not publish this port.
+    expose:
+      - "8080"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  zyroguard-data:
+
+networks:
+  n8n_default:
+    external: true

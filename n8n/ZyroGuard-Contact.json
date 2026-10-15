@@ -1,0 +1,57 @@
+{
+  "name": "ZyroGuard-Contact",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zyroguard-contact-ad3c80a3d6e65ea2",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "zyroguard-contact"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict"},
+          "conditions": [
+            {
+              "id": "secret",
+              "leftValue": "={{ $json.headers['x-zyroguard-secret'] }}",
+              "rightValue": "CHANGE-ME-same-as-CONTACT_WEBHOOK_SECRET",
+              "operator": {"type": "string", "operation": "equals"}
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Secret ok?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "sendTo": "raven@publicai.io",
+        "subject": "={{ $json.body.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body.text }}",
+        "options": {}
+      },
+      "name": "Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [460, -80]
+    }
+  ],
+  "connections": {
+    "Webhook": {"main": [[{"node": "Secret ok?", "type": "main", "index": 0}]]},
+    "Secret ok?": {"main": [[{"node": "Gmail", "type": "main", "index": 0}], []]}
+  },
+  "settings": {"executionOrder": "v1"}
+}

@@ -1,0 +1,160 @@
+{
+  "name": "ZyroGuard-Modlog",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zyroguard-event",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "a1b2c3d4-0001-4000-8000-000000000001",
+      "name": "ZyroGuard event",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "zyroguard-event"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-secret",
+              "name": "SECRET",
+              "value": "CHANGE_ME",
+              "type": "string"
+            },
+            {
+              "id": "cfg-modlog",
+              "name": "MODLOG_CHAT_ID",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "a1b2c3d4-0002-4000-8000-000000000002",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "chk-secret",
+              "leftValue": "={{ $('ZyroGuard event').item.json.headers['x-zyroguard-secret'] }}",
+              "rightValue": "={{ $json.SECRET }}",
+              "operator": { "type": "string", "operation": "equals" }
+            },
+            {
+              "id": "chk-event",
+              "leftValue": "={{ $('ZyroGuard event').item.json.body.event }}",
+              "rightValue": "action",
+              "operator": { "type": "string", "operation": "equals" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4-0003-4000-8000-000000000003",
+      "name": "Check secret",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Config').item.json.MODLOG_CHAT_ID }}",
+        "text": "={{ (() => { const b = $('ZyroGuard event').item.json.body; const who = b.username ? '@' + b.username : String(b.user_id); const dur = b.duration ? ' ' + b.duration : ''; const tag = b.shadow ? 'SHADOW would ' : ''; const excerpt = (b.message_text || '').slice(0, 300).replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c])); return `<b>${tag}${b.action}${dur}</b> ${who} in ${b.chat_title || b.chat_id}\\n<i>${b.reason}</i> (${b.source}, strikes ${b.strikes})\\n<code>${excerpt}</code>\\n#${b.audit_id}`; })() }}",
+        "additionalFields": { "parse_mode": "HTML", "disable_web_page_preview": true }
+      },
+      "id": "a1b2c3d4-0004-4000-8000-000000000004",
+      "name": "Post to mod log",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [680, -100],
+      "credentials": {}
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            { "field": "cronExpression", "expression": "0 9 * * *" }
+          ]
+        }
+      },
+      "id": "a1b2c3d4-0005-4000-8000-000000000005",
+      "name": "Daily 09:00",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://zyroguard:8080/stats",
+        "sendQuery": true,
+        "queryParameters": { "parameters": [ { "name": "since", "value": "24h" } ] },
+        "sendHeaders": true,
+        "headerParameters": { "parameters": [ { "name": "X-ZyroGuard-Secret", "value": "CHANGE_ME" } ] },
+        "options": { "timeout": 10000 }
+      },
+      "id": "a1b2c3d4-0006-4000-8000-000000000006",
+      "name": "GET /stats",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "cfg-modlog-2",
+              "name": "MODLOG_CHAT_ID",
+              "value": "",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "id": "a1b2c3d4-0007-4000-8000-000000000007",
+      "name": "Config digest",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.MODLOG_CHAT_ID }}",
+        "text": "={{ (() => { const s = $('GET /stats').item.json; const acts = Object.entries(s.by_action || {}).map(([k, v]) => `${k} ${v}`).join(', ') || 'none'; const src = Object.entries(s.by_source || {}).map(([k, v]) => `${k} ${v}`).join(', ') || 'none'; const top = (s.top_reasons || []).slice(0, 5).map(r => `${r[0]} ${r[1]}`).join(', ') || 'none'; return `<b>ZyroGuard digest, last 24h</b>\\nActions: ${s.total} (${acts})\\nSources: ${src}\\nTop reasons: ${top}\\nUndone: ${s.undone}, shadow: ${s.shadow}\\nJudge calls: ${s.judge_calls} (${s.judge_input_tokens} in / ${s.judge_output_tokens} out tokens)`; })() }}",
+        "additionalFields": { "parse_mode": "HTML" }
+      },
+      "id": "a1b2c3d4-0008-4000-8000-000000000008",
+      "name": "Post digest",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [680, 300],
+      "credentials": {}
+    }
+  ],
+  "connections": {
+    "ZyroGuard event": { "main": [[ { "node": "Config", "type": "main", "index": 0 } ]] },
+    "Config": { "main": [[ { "node": "Check secret", "type": "main", "index": 0 } ]] },
+    "Check secret": { "main": [[ { "node": "Post to mod log", "type": "main", "index": 0 } ], []] },
+    "Daily 09:00": { "main": [[ { "node": "GET /stats", "type": "main", "index": 0 } ]] },
+    "GET /stats": { "main": [[ { "node": "Config digest", "type": "main", "index": 0 } ]] },
+    "Config digest": { "main": [[ { "node": "Post digest", "type": "main", "index": 0 } ]] }
+  },
+  "settings": { "executionOrder": "v1", "timezone": "Asia/Manila" },
+  "active": false
+}

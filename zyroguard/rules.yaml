@@ -1,0 +1,365 @@
+# Deterministic rules. Reloaded with /reloadrules (owner) without a restart.
+#
+# hard:    match = act immediately (no Claude call). Each has an id and a regex.
+#          Regexes are matched case-insensitively against the message text with
+#          confusable characters folded to ASCII and zero-width chars removed.
+# soft:    each match adds `weight` to a score. score >= judge_threshold sends the
+#          message to Claude; score >= hard_threshold acts without Claude.
+# Regexes use Python `re` syntax.
+
+thresholds:
+  judge: 4        # score at or above this goes to the AI judge
+  hard: 10        # score at or above this acts without the judge
+  repeat_window_minutes: 10
+
+# Hard rules act at once, so only patterns that are never legitimate belong here.
+# Vocabulary ("airdrop", "USDT", "guaranteed") lives in soft rules: it raises the
+# score and the AI judge decides, so normal crypto or trading talk is not punished.
+hard:
+  - id: seed_phrase_request
+    desc: Asking for a wallet seed phrase or private key
+    pattern: '(?<!never )(?<!not )(?<!don''t )(?<!dont )(?<!ever )\b(share|send|enter|provide|import|connect|submit|input|paste|type)\b.{0,40}\b(seed\s*phrase|recovery\s*phrase|mnemonic|private\s*key|12[- ]word|24[- ]word)|\b(seed\s*phrase|recovery\s*phrase|mnemonic|private\s*key)\b.{0,40}\bto\s+(sync|fix|verify|validate|restore|recover|rectify|reconnect)\b'
+
+  # 🔞 in the text, a button or the name of the channel it was forwarded from.
+  # Admins are exempt, so a rules post that uses the emoji is not affected.
+  - id: adult_marker
+    desc: Adult content marker (🔞)
+    pattern: '🔞'
+
+soft:
+  # Adult-content spam: explicit words (❌❌❌ is folded to xxx before matching) and the
+  # "category menu" these channels post (ROUGH / FIRST TIME / BACKSTAGE / HOMEMADE).
+  # Menu words ("rough", "leak", "first time") are everyday English, so they only count next to
+  # another adult signal (adult emoji, an "open here" link, a channel forward): "found a memory
+  # leak, rough day" scores nothing, while the ❌ menu forward with a button still acts.
+  - id: adult_explicit
+    weight: 4
+    pattern: '\b(porn\w*|xxx+|nsfw|onlyfans|only\s*fans|hentai|nudes?|horny|sexting|sex\s*(videos?|tapes?|chat|cams?)|18\s*\+|milfs?|cam\s*girls?|escorts?|hookups?)\b'
+  - id: adult_menu
+    weight: 2
+    needs: [adult_explicit, adult_emoji, open_here, forward_channel_soft]
+    pattern: '\b(rough|first\s*time|backstage|home\s*made|homemade|amateur|leak(ed|s)?|uncensored|hardcore|step\s*(sis|sister|mom|bro)|teens?|hidden\s*cam|spy\s*cam|casting|lesbians?|busty)\b'
+  - id: adult_emoji
+    weight: 1
+    pattern: '[🔥💦🍑🍆👅💋🥵😈🫦]'
+  - id: open_here
+    weight: 2
+    pattern: '\b(open|click|tap|watch|join|see)\s+(here|now|below|link|inside|full)\b|👉.{0,30}👈'
+  - id: seed_phrase
+    weight: 3
+    pattern: '\b(seed\s*phrase|recovery\s*phrase|mnemonic|private\s*key|12[- ]word|24[- ]word)\b'
+  - id: usdt_commission
+    weight: 4
+    pattern: '\b(usdt|tether)\b.{0,60}\b(commission|holders?|partner|acquir\w+|trading with us)\b|\b(commission|holders?|acquir\w+)\b.{0,60}\b(usdt|tether)\b'
+  - id: guaranteed_return
+    weight: 3
+    pattern: '\b(guarantee\w*|assured|risk[- ]?free)\b.{0,40}\b(profit|return|commission|income|\d{1,3}\s*%)'
+  - id: pct_commission
+    weight: 4
+    pattern: '\d{1,2}\s*%\s*(to|-|–)\s*\d{1,3}\s*%.{0,40}\b(commission|profit|return|reward)\b'
+  - id: dm_me_earn
+    weight: 4
+    pattern: '\b(dm|pm|message|contact|inbox|text)\s+(me|us|admin)\b.{0,60}\b(earn|profit|invest|usdt|btc|crypto|trade|signal|job|income)\b'
+  - id: airdrop_claim
+    weight: 2
+    pattern: '\b(giveaway|claim\s+(your|free)|free\s+(usdt|eth|btc|sol|tokens?))\b'
+  - id: eth_address
+    weight: 4
+    pattern: '\b0x[a-f0-9]{40}\b'
+  - id: tron_address
+    weight: 4
+    pattern: '\bT[1-9A-HJ-NP-Za-km-z]{33}\b'
+  - id: btc_address
+    weight: 4
+    pattern: '\b(bc1[a-z0-9]{25,62}|[13][a-km-zA-HJ-NP-Z1-9]{25,34})\b'
+  - id: whatsapp_pivot
+    weight: 2
+    pattern: '\b(wa\.me/|signal\s+me|telegram\s*:\s*@)|\bwhats\s*app\b.{0,30}\b(me|us|number|\+?\d{6,})'
+  - id: whatsapp_more
+    weight: 2
+    only: jobs
+    pattern: '\b(on|via|thru|through)\s+(whats\s*app|wechat|viber)\b|\b(whats\s*app|wechat|viber|telegram)\s*:?\s*\+\d[\d\s-]{7,}'
+  - id: fake_support
+    weight: 3
+    pattern: '\b(wallet|account)\b.{0,30}\b(validate|verify|reconnect|rectif\w+)\b|\b(support|help)\s*desk\b.{0,40}\b(link|portal|dapp)\b'
+  - id: company_boilerplate
+    weight: 4
+    pattern: '\b(we are|this is)\b.{0,60}\b(co\.?,?\s*ltd|international|limited|group)\b.{0,80}\b(headquarter\w*|based in|located in)\b'
+  - id: high_yield
+    weight: 3
+    pattern: '\b\d{1,3}\s*%\s*(daily|weekly|per\s*day|a\s*day|per\s*week)\b.{0,40}\b(profit|return|income|earn\w*|roi|guarantee\w*)|\b(profit|return|income|earn\w*|roi)\b.{0,40}\b\d{1,3}\s*%\s*(daily|weekly|per\s*day|a\s*day|per\s*week)\b'
+  # Fake "official" notices that the contract is moving, sent by lookalike-admin accounts:
+  # "we will redeploy our Contract Address (CA)", "upgrading to a new token with a clean CA",
+  # "old tokens will be burned", "DM to register". Real notices come from admins, who are exempt.
+  - id: contract_migration
+    weight: 4
+    pattern: '(?a)\b(redeploy\w*|re-?deploy\w*|migrat\w*|upgrad\w*|relaunch\w*|moving|swap\w*)\b\W+(\w+\W+){0,8}?(contract\s*address|ca)\b|عنوان\s*العقد|新合约|合约地址'
+  - id: old_token_burn
+    weight: 3
+    pattern: '\bold\s+(tokens?|contract|ca)\b.{0,60}\b(burn\w*|invalid|worthless|no\s+longer|deprecat\w*|swap\w*)\b'
+  - id: dm_to_register
+    weight: 3
+    pattern: '\b(dm|pm|message|inbox|contact)\b\W+(\w+\W+){0,6}?(to\s+)?(register|claim|whitelist|migrat\w*|swap\w*|receive)\b'
+  - id: crypto_terms
+    weight: 1
+    # (?a): ASCII word edges, so "USDT" is found inside Chinese text too (寻找USDT持有者)
+    pattern: '(?a)\b(usdt|btc|eth|crypto(currenc\w*)?|bitcoin|ethereum|binance|blockchain|token|forex|defi|nft)\b'
+  - id: money_terms
+    weight: 1
+    pattern: '\b(profit|earn(ing)?s?|income|invest(ment|or)?s?|passive|roi|returns?|commission|payout|withdraw\w*)\b'
+  - id: urgency
+    weight: 1
+    pattern: '\b(urgent(ly)?|limited\s+(time|slots?)|act\s+now|hurry|last\s+chance|only\s+\d+\s+(left|spots?))\b'
+  - id: contact_pitch
+    weight: 2
+    pattern: '\b(contact\s+(us|me)|reach\s+out|inbox\s+me|send\s+(me\s+)?a\s+(dm|pm|message)|write\s+to\s+me)\b'
+  - id: job_bait
+    weight: 2
+    only: no_jobs
+    pattern: '\b(work\s+from\s+home|part[- ]time\s+job|hiring|job\s+offer|daily\s+salary|\$\d{2,4}\s*(per|a|/)\s*(day|hour|week))\b'
+  # Fake jobs and task scams ("like videos, rate products, get paid per task"). Each piece is
+  # ordinary on its own (people talk about jobs, pay and tasks); together with a pay rate and a
+  # contact line they reach the judge. Job-only catches are handled gently, see job_strike_after.
+  # `only: jobs` rules run only in groups with job_rules on (the default); `only: no_jobs` ones
+  # only where it is off, so such a group keeps the rules exactly as they were before 2026-10-13.
+  - id: contact_pitch_more
+    weight: 2
+    only: jobs
+    pattern: '\b((message|text|chat)\s+(me|us)|contact\s+(our|my)\s+(hr|recruiter|receptionist|agent|manager|assistant)|add\s+me\s+(on|in|via)\s+\w+|click\s+the\s+link\s+to\s+apply)\b'
+  - id: job_bait
+    weight: 2
+    only: jobs
+    pattern: '\b(work(ing)?\s+from\s+home|part[- ]?time\s+(job|jobs|work|online|staff|position\w*)|hiring\s+now|now\s+hiring|we\s+are\s+hiring|job\s+offer|daily\s+salary|remote\s+(positions?|jobs?|work)\s+(available|open)|online\s+(staff|encoders?|jobs?|work)|data\s+entry|typing\s+jobs?)\b'
+  - id: pay_rate
+    weight: 2
+    only: jobs
+    # an amount with a currency (or after "earn") and a time unit: "$50 per hour", "200-800 USD daily",
+    # "₱500 hanggang ₱3000 araw-araw", "earn 3000 to 8000 a week". Not "$1 per 1M tokens".
+    pattern: '(?:[$₱€£₹]\s?\d[\d,.]*\s?k?|\b\d[\d,.]*\s?k?\s?(?:usd|php|pesos?|dollars?|d[oó]lares|eur|euros?)\b|\b(?:earn\w*|salary|income|kumita|kikita|gana\w*)\s+(?:up\s+to\s+|from\s+|about\s+)?\d[\d,.]*\s?k?)(?:\s*(?:-|–|to|hanggang|a)\s*(?:[$₱€£₹]\s?)?\d[\d,.]*\s?k?\s?(?:usd|php|pesos?|dollars?|d[oó]lares)?)?\s*(?:/\s*|per\s+|an?\s+|each\s+|every\s+|kada\s+|bawat\s+|por\s+|al\s+)?(?:day|daily|hour|hr|week|weekly|araw(?:-araw)?|oras|linggo|d[ií]a|diarios?|semana)\b'
+  - id: task_scam
+    weight: 3
+    only: jobs
+    pattern: '\b(?:like|follow)\w*\s+(?:and|&|at|dan|y|e|or)\s+(?:like|follow)\w*\b|\b(?:like|likes|follow|subscribe|watch)\w*\b.{0,30}\b(?:videos?|posts?|reels?|channels?)\b.{0,60}\b(?:earn\w*|paid|pay|commission|salary|kita|gana\w*|income|daily)\b|\brat(?:e|ing)\s+(?:products?|hotels?|movies?|restaurants?)\b|\b(?:commission|paid|pay|reward)\b.{0,25}\b(?:every|each|per)\s+(?:task|order|mission|review|like|rating)\b|\bunlock\w*\b.{0,30}\btasks?\b|\b(?:deposit|recharge|top[- ]?up)\b.{0,40}\b(?:tasks?|commission)\b|\bboost\w*\s+(?:app|apps|downloads?|ratings?|sales|orders?)\b|\b(?:app|order|rating|review)s?\s+(?:boost\w*|optimi[sz]\w*|grabb\w*)\b|\b(?:order|merchant|shop)\s+assistants?\b'
+  - id: easy_money
+    weight: 2
+    only: jobs
+    pattern: '\b(?:no\s+experience\s+(?:needed|required|necessary)|beginners?\s+(?:welcome|friendly)|flexible\s+(?:hours|time|schedule)|paid\s+daily|daily\s+pay(?:out)?|payment\s+every\s+day|instant\s+(?:withdrawal|payout)|same[- ]day\s+pay\w*|training\s+provided|(?:via|thru|through)\s+gcash|walang\s+(?:puhunan|bayad|experience)|\d\s*(?:-|to)?\s*\d?\s*(?:hours?|hrs?|oras)\s+(?:lang\s+)?(?:a|per|kada|bawat)\s+(?:day|araw))\b'
+  - id: trading_signals
+    weight: 2
+    pattern: '\b(signals?|mentor(ship)?|copy\s*trad\w+|trading\s+(group|channel|bot|course)|forex\s+trad\w+)\b'
+  - id: large_amounts
+    weight: 1
+    pattern: '\b(large\s+(volumes?|quantit\w+|amounts?)|bulk|wholesale)\b'
+  - id: images_verified
+    weight: 2
+    pattern: '\b(fake|altered|edited)\s+(images?|screenshots?|proofs?)\b|\bverify\s+the\s+authenticity\b'
+  - id: telegram_contact
+    weight: 2
+    pattern: '(?<![\w@])@[a-z0-9_]{5,32}\b.{0,20}\b(direct|dm|contact|advertis\w+|promo)\b|\b(direct|contact|advertis\w+)\b.{0,20}(?<![\w@])@[a-z0-9_]{5,32}\b'
+  - id: emoji_arrows
+    weight: 1
+    pattern: '[👉👈➡️⬅️🔺🔻💰💵💸🤑🚀]'
+  - id: pump_pitch
+    weight: 2
+    pattern: '\b(memecoins?|presale|pre-sale|launching\s+in|\d{2,4}x\b|moon(ing|shot)?|whitelist|mint(ing)?\s+(now|live))\b'
+  - id: guaranteed_word
+    weight: 1
+    pattern: '\bguarante\w+\b'
+  - id: engagement_sales
+    weight: 3
+    pattern: '\b(followers|likes|subscribers|views|members)\b.{0,60}\b(cheap|buy|sell(ing)?|fast\s+delivery|order|price|pm\s+me|dm\s+me)\b|\b(cheap|buy|sell(ing)?)\b.{0,40}\b(followers|likes|subscribers|views)\b'
+  - id: pm_me
+    weight: 1
+    pattern: '\b(pm|dm)\s+me\b'
+  - id: long_pitch
+    weight: 1
+    min_length: 400        # applies when the message is at least this long
+
+  # Account phishing: "your account will be deleted in 24 hours, verify here", fake Telegram /
+  # Meta / GCash support, and above all asking for the login code, OTP or two-step password,
+  # which is how Telegram accounts are stolen. Members warning each other quote these, so the
+  # pieces only add up and phishing-only hits always go to the AI judge (pipeline.phishing_offer).
+  # `only: phishing` = only in groups with phishing_rules on (the default).
+  - id: code_request
+    weight: 5
+    only: phishing
+    pattern: '(?<!never )(?<!not )(?<!don''t )(?<!dont )\b(send|share|give|forward|tell|show|dm)\s+(me|us|it\s+to\s+me|it\s+back|back)\b.{0,40}\b(code|otp|pin|password|passcode)\b|(?<!never )(?<!not )(?<!don''t )(?<!dont )\b(send|share|give|forward|provide|enter)\b.{0,40}\b(code|otp|password|passcode)\b.{0,30}\b(to\s+me|to\s+us|with\s+me|with\s+us|in\s+(dm|pm|private))\b|\breply\s+with\s+(the\s+|your\s+)?(otp|code|password|pin)\b|\bcode\s+(that\s+)?you\s+(just\s+)?(received|got)\b|\bsent\b.{0,30}\bcode\b.{0,30}\b(your|ur)\s+(number|phone)\b'
+  - id: account_threat
+    weight: 3
+    only: phishing
+    pattern: '\b(account|page|profile|wallet|channel|number|gcash|maya)\s+(will\s+be|has\s+been|have\s+been|is\s+being)\s+(temporarily\s+|permanently\s+)?(deleted|suspended|banned|disabled|terminated|restricted|locked|frozen|removed|deactivated|limited|flagged|reported)\b|\b(account|wallet|gcash|maya)\s+(is|are)\s+(temporarily\s+|permanently\s+)?(limited|restricted|locked|frozen|flagged)\b|\b(violated|violating)\s+(our\s+)?(community\s+standards|terms|policies|guidelines)\b|\bcopyright\s+(complaint|claim|infringement|violation)\b'
+  - id: phish_deadline
+    weight: 2
+    only: phishing
+    pattern: '\bto\s+avoid\s+(permanent\s+)?(suspension|deletion|termination|deactivation|ban\w*|being\s+(banned|deleted|suspended)|losing)\b|\bpermanently\s+(disabled|deleted|banned|suspended|removed|locked)\b|\bwithin\s+\d{1,2}\s*(hours?|hrs?|h)\b|\bbefore\s+(your|the)\s+(account|funds|wallet|page)\s+(is|are|gets?)\s+\w+'
+  - id: verify_link
+    weight: 3
+    only: phishing
+    pattern: '\b(verify|confirm|restore|unlock|appeal|activate|reconnect|update|recover|log(ging)?\s+in)\b(\s+(your|it|the))?(\s+(account|identity|details|wallet|access|information|info|page))?.{0,25}(:|\bhere\b|\bbelow\b|\bat\s+[a-z0-9-]+\.[a-z])'
+  - id: brand_domain
+    weight: 4
+    only: phishing
+    # a made-up domain that pairs a brand with a security word: telegram-verify-center.com, meta-appeal-center.com
+    pattern: '\b(?=[a-z0-9-]*(telegram|t-me|meta|facebook|instagram|whatsapp|gcash|maya|paypal|binance|metamask|trustwallet|trust-wallet|apple|icloud|google|bank|parcel|premium))(?=[a-z0-9-]*(verify|verification|support|security|secure|login|help|appeal|recovery|unlock|auth|update|center|centre|gift|redelivery|copyright|kyc))[a-z0-9-]+\.[a-z]{2,10}\b'
+  - id: kyc_selfie
+    weight: 3
+    only: phishing
+    pattern: '\b(send|upload|submit)\b.{0,30}\b(photo|picture|copy|scan)?\s*(of\s+)?(your\s+)?(id|passport|driver.?s\s+licen[cs]e|selfie)\b'
+  - id: support_impersonation
+    weight: 3
+    only: phishing
+    pattern: '\b(this\s+is|i\s*.?a?m\s+from|from\s+the)\s+(telegram|meta|facebook|instagram|whatsapp|gcash|paypal|binance|metamask|trust\s*wallet)\s+(support|security|team|help\s*desk|safety)\b|\b(admin|moderator|mod)\s+here\b.{0,40}\bverif\w+'
+  - id: tl_account_threat
+    weight: 3
+    only: phishing
+    pattern: '\b(na-?lock|ma-?lock|ma-?suspend|na-?suspend|ma-?block|na-?block|ma-?delete|ide-?delete|mabubura)\b.{0,40}\b(account|gcash|maya)\b|\b(account|gcash|maya)\b.{0,40}\b(na-?lock|ma-?suspend|na-?suspend|ma-?block|na-?block|ma-?delete|mabubura)\b|\bi-?verify\s+(agad\s+)?(dito|ngayon)\b'
+
+  # ---- the same scams in other languages ------------------------------------------
+  # Same weights as the English rules above: a money word alone stays quiet, a pitch
+  # (USDT + commission, earn + contact me) reaches the judge or acts on its own.
+  # Matched against the original letters, so Cyrillic stays Cyrillic. Chinese has no
+  # spaces, so its patterns use no word edges. Languages not listed here are covered by
+  # foreign_language_risk in code: risk signs in a non-English message go to the AI judge.
+
+  # Russian / Cyrillic
+  - id: ru_usdt_pitch
+    weight: 4
+    pattern: '(usdt|юсдт|тезер\w*|крипт\w*).{0,60}(комисси\w*|держател\w*|партн[её]р\w*|обмен\w*)|(комисси\w*|держател\w*|скупа\w*|покупа\w*).{0,60}(usdt|юсдт|крипт\w*)'
+  - id: ru_money
+    weight: 2
+    pattern: '(?<!\w)(комисси\w*|заработ\w*|доход\w*|прибыл\w*|инвестиц\w*|пассивн\w*|выплат\w*|гарантир\w*)'
+  - id: ru_contact
+    weight: 3
+    pattern: '(пиш\w*|напиш\w*|обращ\w*|стучи\w*)\s+(мне\s+)?(в\s+)?(лс|личк\w*|личные|директ)|за\s+подробност\w*|(?<!\w)в\s+лс(?!\w)'
+  - id: ru_job_bait
+    weight: 2
+    pattern: '(?<!\w)(ищем\s+(людей|сотрудник\w*|партн\w*)|требуются|набираем|подработ\w*|удал[её]нн\w*\s+работ\w*|вакансия)'
+  - id: ru_adult
+    weight: 4
+    pattern: '(?<!\w)(интим\w*|эротик\w*|порно\w*|голые|сливы\s+\w+|проститут\w*|эскорт\w*)'
+
+  # Chinese
+  - id: zh_usdt_pitch
+    weight: 4
+    pattern: '(usdt|泰达币|u币).{0,30}(佣金|兑换|承兑|持有|收购|回收)|(收购|承兑|兑换|回收|持有者).{0,20}(usdt|泰达币|u币)'
+  - id: zh_money
+    weight: 2
+    pattern: '佣金|返利|收益|日赚|躺赚|赚钱|高薪|兼职|日结|稳赚|保本|零风险|高回报|带单|拉人头'
+  - id: zh_contact
+    weight: 3
+    pattern: '私信|私聊|加我|联系我|飞机号|电报号|加微信|微信号|(?<![a-z])(vx|wx)(?![a-z])|tg[:：]'
+  - id: zh_gambling_adult
+    weight: 4
+    pattern: '博彩|赌场|百家乐|体育投注|棋牌|约炮|裸聊|色情|成人视频|黄片|外围|楼凤'
+
+  # Indonesian / Malay
+  - id: id_usdt_pitch
+    weight: 4
+    pattern: '\b(usdt)\b.{0,60}\b(komisi|pemegang|mitra)\b|\b(komisi|pemegang|mitra)\b.{0,60}\busdt\b'
+  - id: id_money
+    weight: 2
+    pattern: '\b(komisi|keuntungan|penghasilan|cuan|investasi|profit\s+harian|gaji\s+harian|kerja\s+sampingan|kerja\s+dari\s+rumah|pinjaman\s+online)\b'
+  - id: id_contact
+    weight: 3
+    pattern: '\b(hubungi\s+(kami|saya|admin)|chat\s+(saya|admin)|(dm|pm)\s+saya|info\s+lebih\s+lanjut|wa\s*[:：]?\s*\+?\d{6,})'
+  - id: id_gambling
+    weight: 4
+    pattern: '\b(slot\s*gacor|gacor|maxwin|togel|judi\s+online|situs\s+slot|deposit\s+pulsa)\b'
+
+  # Vietnamese
+  - id: vi_usdt_pitch
+    weight: 4
+    pattern: 'usdt.{0,60}(hoa\s+hồng|người\s+giữ|đối\s+tác)|(hoa\s+hồng|người\s+giữ).{0,60}usdt'
+  - id: vi_money
+    weight: 2
+    pattern: 'hoa\s+hồng|lợi\s+nhuận|thu\s+nhập|kiếm\s+tiền|đầu\s+tư|việc\s+làm\s+online|cộng\s+tác\s+viên|lương\s+cao'
+  - id: vi_contact
+    weight: 3
+    pattern: 'liên\s+hệ|nhắn\s+tin|ib\s+(mình|em|anh)|(?<![a-z])zalo(?![a-z])'
+  - id: vi_gambling
+    weight: 4
+    pattern: 'cá\s+cược|nhà\s+cái|tài\s+xỉu|nổ\s+hũ|lô\s+đề'
+
+  # Tagalog
+  - id: tl_money
+    weight: 2
+    pattern: '\b(kumita|kita\s+agad|puhunan|sahod|trabaho\s+sa\s+bahay|raket|komisyon|libreng\s+pera|extra\s+income)\b'
+  - id: tl_contact
+    weight: 3
+    pattern: '\b(pm\s+(mo\s+)?(ako|lang|me)|message\s+mo\s+ako|chat\s+mo\s+ako|i-?message\s+mo)\b'
+  - id: tl_gambling
+    weight: 4
+    pattern: '\b(e-?sabong|online\s+sabong|sabong)\b'
+
+  # Spanish / Portuguese
+  - id: es_pt_money
+    weight: 2
+    pattern: '\b(comisi[oó]n|comiss[aã]o|ganancias|ganhar\s+dinheiro|ganar\s+dinero|inversi[oó]n|investimento|lucro\s+diario|renda\s+extra)\b'
+  - id: es_pt_job
+    weight: 2
+    only: jobs
+    pattern: '\b(trabajo\s+desde\s+casa|trabalho\s+em\s+casa|trabajo\s+en\s+l[ií]nea)\b'
+  - id: es_pt_contact
+    weight: 3
+    pattern: '\b(escr[ií]beme|cont[aá]ctame|me\s+chama\s+no\s+(privado|pv)|chama\s+no\s+pv|mensaje\s+privado|al\s+privado)\b'
+
+  # Arabic
+  - id: ar_money
+    weight: 2
+    pattern: 'عمولة|ارباح|أرباح|استثمار|دخل\s+يومي'
+  - id: ar_contact
+    weight: 3
+    pattern: 'تواصل\s+معي|راسلني|للتواصل|واتساب'
+
+# Sender display-name / username fragments that mean impersonation when the
+# sender is not actually an admin of the group.
+# Matched as whole words (CamelCase split, plural s allowed), so "BadmintonFan" or
+# "Lakers Supporter" are fine while "JohnAdmin" or "crypto_support" are not.
+impersonation:
+  - admin
+  - administrator
+  - support
+  - moderator
+  - official
+  - helpdesk
+  - customer care
+  - verification
+
+# Names protected in every group: a non-admin whose name imitates one of these with lookalike
+# letters (ZyroGuarcl, Zyr0Guard) is removed at join and on any message. Each group adds its own
+# with the protected_names setting (e.g. AcmeAI).
+protected_names:
+  - ZyroGuard
+
+# Display names / bios that block a join outright.
+# Only links: ordinary words like "crypto" or "support" in a name are not a reason to kick.
+join_name_patterns:
+  - 't\.me/'
+  - 'https?://'
+
+bio_patterns:
+  - 't\.me/'
+  - 'https?://'
+  - '\b(usdt|investment|forex|signals?|crypto\s+expert|account\s+manager)\b'
+
+# Domains that never count as links (applies to every group unless overridden).
+global_allow_domains:
+  - github.com
+  - wikipedia.org
+  - youtube.com
+  - youtu.be
+
+# Safety check triggers. A text message matching one of these is sent to the AI
+# safety check (explicit, violent, harassing or hateful content). Images always
+# go to the safety check when it is on, so no trigger is needed for them.
+# Admins can widen this with /rule add, which acts immediately without the AI.
+safety_triggers:
+  - '\b(kill|hang|shoot)\s+(your|ur)\s*self\b|\bkys\b'
+  - '\b(rape|raping|rapist)\b'
+  - '\b(nigg\w*|fagg?\w*|tranny|retard\w*|kike|spic|chink|wetback)\b'
+  - '\b(whore|slut|cunt)\b'
+  - '\b(nude|nudes|porn\w*|onlyfans|sex\s*(chat|cam|video)|xxx+|nsfw|hentai|horny)\b'
+  - '🔞|\b18\s*\+'
+  - '\b(leaked|homemade|uncensored|backstage|rough)\b.{0,60}\b(video|vids?|pics?|photos?|content|tape|here|first\s*time)\b'
+  - '\b(hot|sexy)\s+(girls?|videos?|pics|content|chat)\b'
+  - '\b(i will|gonna|going to)\s+(find|hurt|kill|beat|stab)\s+(you|u|him|her|them)\b'

@@ -1,0 +1,17 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+data/
+*.db
+*.db-wal
+*.db-shm
+.pytest_cache/
+.env.*
+!.env.example
+node_modules/
+deploy.sh
+*.log
+case-study/stats*.json
+case-study/stats.err
+.zyroguard-public-export
