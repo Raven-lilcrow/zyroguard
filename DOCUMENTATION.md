@@ -29,7 +29,7 @@ To run your own copy of the bot on a server see `deploy.md`; for the code see `R
 | Feature | What it does | Key commands | Details |
 |---|---|---|---|
 | **Spam and phishing protection** | Removes scam links, investment pitches, fake jobs and task scams, account phishing and fake support accounts. Rules catch the clear cases, an AI judge checks the unclear ones. Starts in shadow mode (report only). | `/mode enforce`, `/test`, `/rule`, `/blockdomain`, `/allow` | Sections 1, 5 |
-| **Group cleaning** | Captcha for new members, 24 hours without links, media or forwards for newcomers, join/leave messages removed, flood control, the safety check for explicit or abusive content, notices that delete themselves. | `/setcaptchatime`, `/setrestrict`, `/setflood`, `/setsafety` | Sections 1 (join gate), 6, 13 |
+| **Group cleaning** | Captcha for new members, 24 hours without links or forwards for newcomers (their pictures go through the safety check), join/leave messages removed, flood control, the safety check for explicit or abusive content, notices that delete themselves. | `/setcaptchatime`, `/setrestrict`, `/setflood`, `/setsafety` | Sections 1 (join gate), 6, 13 |
 | **Teaching by example** | Admins teach spam with `/spam` (as a reply, with an action number, or the Teach as spam button on a report). The meaning match then spots messages that mean the same thing in about 50 languages. Starts in a trial until `/set similarity on`. | `/spam`, `/notspam`, `/examples`, `/forget` | Section 5, "Teaching by example" |
 | **Admin tools** | Ban, mute, kick, warn and undo, plus a report with Undo, Why and Teach as spam buttons for every action, and `/log`, `/why`, `/stats`. All of it works from the private chat too. | `/ban`, `/mute`, `/warn`, `/undo`, `/log` | Sections 4, 7 |
 
@@ -162,7 +162,8 @@ For every message from a non-admin, the bot runs these checks in order. The firs
 
 1. **Skip list.** Admins, allowlisted users, and the bot itself are never checked.
 2. **Structural hard rules.** Things only spam bots do: inline buttons on a message, forwards
-   from channels, messages sent "via bot", invite links, links or media from new members,
+   from channels, messages sent "via bot", invite links, links from new members (and their media when
+   `media_unverified` is `delete`),
    bot mentions of other bots from new members, impersonation names, flooding, and the same
    text with a link or contact posted by several accounts. Most of the newcomer rules only
    delete the message (no strike), so a mistake costs nothing.
@@ -180,7 +181,7 @@ For every message from a non-admin, the bot runs these checks in order. The firs
    threshold. If the API fails, nothing is deleted.
 6. **Action.** Delete the message, then apply the strike ladder. Every action is written to
    the audit log and posted to the mod-log group with Undo and Why buttons. If `N8N_EVENT_URL` is
-   set, n8n gets a copy too (not set on the live server as of 2026-10-14).
+   set, n8n gets a copy too.
 
 Edited messages are re-checked, because spammers post clean text then edit a link in.
 
@@ -225,7 +226,7 @@ quickly. Two things are different from other scams:
 
 `/set job_rules off` turns all of this off for one group: it then keeps exactly the rules and
 handling it had before the job rules were added (the rules marked `only: jobs` in rules.yaml are
-skipped and the old `only: no_jobs` versions used). One group runs with it off for now.
+skipped and the old `only: no_jobs` versions used).
 
 ### Account phishing
 
@@ -243,7 +244,7 @@ Only if the judge is off or not set up do the rules act alone. "Never share your
 "the app sends an OTP" do not count as a request.
 
 `/set phishing_rules off` turns this off for one group (it keeps the rules it had before, the
-new ones are marked `only: phishing`). One group runs with it off for now.
+new ones are marked `only: phishing`).
 
 ### Join gate
 
@@ -256,8 +257,9 @@ When someone joins:
 3. **Captcha.** The newcomer is muted and asked to pick the word that matches a picture
    (emoji mode, the default; math mode asks a small sum, button mode is a single tap). No
    answer within the timeout, or three wrong taps, means kick. Only that user can press it.
-4. **Restriction window.** For 24 hours after verifying, links, media, forwards and bot
-   mentions from that member are removed.
+4. **Restriction window.** For 24 hours after verifying, and until they have sent 5 messages,
+   links, forwards and bot mentions from that member are removed. Their pictures go through the
+   safety check instead (`/set media_unverified delete` removes all their media).
 5. **Cleanup.** "X joined" and "X left" service messages are deleted.
 
 By default everyone gets the captcha on every join, even after leaving and coming back
@@ -429,7 +431,7 @@ event. `/resume` ends the pause early.
 | `captcha_every_join` | `on` | Everyone gets the captcha each time they join, even if they passed it before and left. `off` = only the first time. |
 | `strict_unverified` | `on` | Delete everything an unverified newcomer sends. |
 | `skip_verified_anywhere` | `off` | Trust users who passed the captcha in any group this bot serves. |
-| `restrict_window` | `24h` | Block links, media and forwards for this long after verifying. `0` disables. Shortcut `/setrestrict 72h`. |
+| `restrict_window` | `24h` | Newcomer rules (no links or forwards) last this long after verifying. `0` disables. Shortcut `/setrestrict 72h`. |
 | `new_member_msgs` | `5` | A member also counts as new until they have sent this many messages. |
 | `cas` | `on` | Check joiners against Combot Anti-Spam. |
 | `cas_action` | `ban` | Action for CAS-listed users. Shortcut `/setcasmode kick`. |
