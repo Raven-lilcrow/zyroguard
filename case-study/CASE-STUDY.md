@@ -18,7 +18,7 @@ The first deployment was a crypto community, but almost nothing in it is crypto-
 
 **Shadow before enforce.** Every group starts in shadow mode: the bot logs what it would have done and does nothing. The admins read the log for a day, and only then switch to enforce. Shadow actions never add strikes, so a group's trial run cannot follow anyone into enforce mode. The same rule now applies to new features: the meaning match shipped in shadow and only records what it would have changed.
 
-**A guard right before every action.** Admins, owners and allowlisted users are skipped early in the pipeline. They are also checked again at the very last step, inside the code that calls Telegram's ban and mute. If a bug anywhere upstream ever pointed an automatic action at an admin, that last check drops it. It has never fired in production, which is the point.
+**A guard right before every action.** Admins and allowlisted users are skipped early in the pipeline. They are also checked again at the very last step, inside the code that calls Telegram's ban and mute. If a bug anywhere upstream ever pointed an automatic action at an admin, that last check drops it. It has never fired in production, which is the point.
 
 ## The number
 
@@ -85,11 +85,11 @@ The bot holds ban rights in groups it does not own, so it is built to fail close
 
 - Buttons are only accepted if that button exists on that exact message, so a forged callback cannot trigger an undo or a mode switch.
 - The bot token is redacted from every logged error.
-- Each group owner gets a daily AI cap, member questions to the bot are capped per day, and the picture safety check has its own cap, so nobody can spend the AI budget by spamming.
+- Each group has a daily AI cap, member questions to the bot are capped per day, and the picture safety check has its own cap, so nobody can spend the AI budget by spamming.
 - The meaning match runs locally, and if the model ever fails to load the bot carries on with its rules and judge.
 - The database is backed up every night and kept for 14 days. Every deploy tags the previous image so a rollback is one command.
 - Production checks are read-only. They open the database in read-only mode and send no messages, and model tests run in a throwaway container with the database mounted read-only.
-- Support files are read in memory and never saved as files; only their text is kept, per group. Files with passwords or keys in them are refused, and only the group's owner-level admins can change where members are sent for help, with every change reported.
+- Support files are read in memory and never saved as files; only their text is kept, per group. Files with passwords or keys in them are refused, and only the group's top admins can change where members are sent for help, with every change reported.
 - 443 tests, including end-to-end runs of the whole pipeline against a fake Telegram, plus a check that walks a brand-new group through every feature on the live version with the real AI (31 of 31 passed on 2026-10-14).
 
 ## What the numbers do not say

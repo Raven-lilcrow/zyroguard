@@ -81,7 +81,7 @@ I start in shadow mode: I only report what I would do. When the reports look rig
 /set judge_context a coffee shop community – tells the AI judge what's normal in your group""",
     "cleaning": """<b>Group cleaning</b>
 • New members pass a quick captcha (pick the word for a picture) before they can talk. Most spam bots never get past it.
-• For their first 24 hours, new members can't post links, media or forwards.
+• For their first 24 hours, new members can't post links or forwards, and their pictures go through the safety check.
 • "Joined" and "left" messages are removed.
 • Flooding (more than 5 messages in 10 seconds) gets the sender muted for an hour.
 • Explicit, violent, bullying or hateful images and messages are removed. This is the safety check.

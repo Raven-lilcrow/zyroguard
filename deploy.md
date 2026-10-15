@@ -88,7 +88,7 @@ live database.
 The server's sshd blocks an address after about 3 logins in quick succession, so do each check
 or deploy in one ssh connection.
 
-Rules-only change: scp `zyroguard/rules.yaml` (it is bind-mounted into the container), then send `/reloadrules` to the bot as the owner. No restart.
+Rules-only change: scp `zyroguard/rules.yaml` (it is bind-mounted into the container), then `docker compose restart`.
 
 ## Backup
 
@@ -123,7 +123,7 @@ second copy you can extend (Slack, email, a sheet) without touching the bot.
 | Captcha never restricts | Group is in shadow mode. `/mode enforce`. |
 | Claude failed in `/diag` | Key missing or wrong, or outbound HTTPS blocked. Look at `docker compose logs zyroguard`. |
 | n8n failed in `/diag` | Network name mismatch, or workflow not active. Test with `docker exec zyroguard python -c "import urllib.request;print(urllib.request.urlopen('http://n8n:5678/healthz').status)"`. |
-| Bot left the group | Added by someone who is neither an owner nor a permit holder. Add it as the owner, `/permit` that person, or put the id in `ALLOWED_CHAT_IDS` and `docker compose up -d`. |
+| Bot left the group | Added from an account that is not in `OWNER_IDS`. Add it from that account, or put the id in `ALLOWED_CHAT_IDS` and `docker compose up -d`. |
 
 A cron job on the host runs `/opt/zyroguard/backup.sh` daily at 03:15 (server time). It makes a consistent
 copy with SQLite's backup API into `/opt/zyroguard/backup/zyroguard-<date>.db` and keeps 14 days.

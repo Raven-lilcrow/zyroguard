@@ -57,7 +57,7 @@ _add(Spec("strict_unverified", "bool", "on", "Block unverified newcomers",
 _add(Spec("skip_verified_anywhere", "bool", "off", "Skip captcha if passed elsewhere",
           "Skip captcha for users who passed it in any group served by this bot.", menu_options=("on", "off"), group="join"))
 _add(Spec("restrict_window", "duration", "24h", "New member limits last",
-          "After verifying, block links/media/forwards for this long. 0 disables.", menu_options=("0", "24h", "72h"), group="join"))
+          "After verifying, new members can't post links or forwards for this long. 0 disables.", menu_options=("0", "24h", "72h"), group="join"))
 _add(Spec("new_member_msgs", "int", "5", "New-member message count",
           "A member also counts as new until they have sent this many messages.", group="join"))
 _add(Spec("cas", "bool", "on", "CAS check", "Act on people on the known spammer list (Combot Anti-Spam) when they join.",

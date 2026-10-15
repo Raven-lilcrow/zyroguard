@@ -1,6 +1,6 @@
 # Real Telegram test: a new group, new files, everything
 
-About 30 minutes. You need your main account (the bot owner) and a **second Telegram account that is
+About 30 minutes. You need your main account and a **second Telegram account that is
 not an admin** (members are checked; admins are not). The files are in this folder. The same steps
 ran automatically on 2026-10-14 (`tools/e2e_full_setup.py`); the "You should see" lines come from that run.
 
@@ -94,6 +94,4 @@ Wait about 10 seconds between questions: a second question within 8 seconds gets
 
 ## F. When you're done
 
-Tell me, and I'll check the group read-only on the server (files, questions, actions, errors).
-To clean up afterwards: remove the bot from the group, then send `/purge <group id>` to the bot in a
-private chat (I can give you the id). That deletes the test group's records and files.
+Remove the bot from the test group.

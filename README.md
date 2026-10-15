@@ -145,7 +145,7 @@ By default a bot only sees commands. Send `/setprivacy` to @BotFather, pick your
 **Disable**, so ZyroGuard can see every message. If the bot is already in a group, remove it and
 add it again for the change to apply.
 
-### Make yourself the owner
+### Add your Telegram id
 
 Start a private chat with your bot and send `/id`. Put the number in `OWNER_IDS` in `.env` and
 restart the container.
@@ -156,13 +156,13 @@ Add the bot to the group as an admin with three rights: **Delete messages**, **B
 **Invite users via link**. Leave the rest off. The bot posts a welcome; then send `/diag` in the
 group, and every line should show a check mark. A failed line comes with a one-line fix.
 
-The bot only stays in groups added by an owner, by a permit holder who is an admin of that group,
-or listed in `ALLOWED_CHAT_IDS`. It leaves any other group. The `/` command menus are registered by
+The bot only stays in groups added from that account or listed in `ALLOWED_CHAT_IDS`. It leaves
+any other group. The `/` command menus are registered by
 the bot itself, so there is nothing to set up for them in @BotFather.
 
 ## Configuration
 
-ZyroGuard has two layers of configuration. Server-wide values (secrets, owners, the AI model) live
+ZyroGuard has two layers of configuration. Server-wide values (secrets, your Telegram id, the AI model) live
 in `.env`. Everything else is a per-group setting stored in the database and changed from Telegram.
 
 ### Environment variables
@@ -170,7 +170,7 @@ in `.env`. Everything else is a per-group setting stored in the database and cha
 | Variable | Default | What it does |
 |---|---|---|
 | `BOT_TOKEN` | required | The token from @BotFather. |
-| `OWNER_IDS` | empty | Telegram user ids of the bot owners, comma separated. Owners can do everything in every group. |
+| `OWNER_IDS` | empty | Your Telegram user id. The bot guards the groups you add it to from this account. |
 | `ANTHROPIC_API_KEY` | empty | Claude API key. Empty runs without the AI judge, safety check and question answering. |
 | `ANTHROPIC_BASE_URL` | empty | An Anthropic-compatible gateway. Empty uses api.anthropic.com. |
 | `JUDGE_MODEL` | `claude-opus-5` | Model for the judge, the safety check and answers. |
@@ -178,7 +178,7 @@ in `.env`. Everything else is a per-group setting stored in the database and cha
 | `ASSISTANT_EFFORT` | `medium` | Reasoning effort for answering members' questions. |
 | `MODE` | `shadow` | Starting mode for new groups: `shadow` reports only, `enforce` acts. |
 | `ALLOWED_CHAT_IDS` | empty | Groups the bot always serves, whoever added it. |
-| `MODLOG_CHAT_ID` | empty | A private chat that receives reports for the owners' groups. |
+| `MODLOG_CHAT_ID` | empty | A private chat that receives reports for groups without their own log chat. |
 | `CAS_ENABLED` | `true` | Look up newcomers in the Combot Anti-Spam list. |
 | `SIMILARITY` | `true` | Load the meaning model. `false` saves about 600 MB of memory but also turns off the meaning match and ZyroMod. |
 | `CONTACT_EMAIL` | empty | Shown with the "Contact the admin" button. |
@@ -224,7 +224,7 @@ dropped. It needs no open port: it talks to Telegram by long polling.
 ### The rules file
 
 [`zyroguard/rules.yaml`](zyroguard/rules.yaml) is mounted into the container read-only, so rules can
-change without a rebuild: edit the file on the server, then send `/reloadrules` to the bot. It
+change without a rebuild: edit the file on the server, then `docker compose restart`. It
 holds the score thresholds (`judge: 4`, `hard: 10`), the few rules that act alone, the scored rules
 with their weights, impersonation patterns, names protected in every group, join and bio patterns,
 domains that are always allowed, and the words that trigger the safety check. Each group can add
@@ -243,7 +243,7 @@ a message hits and what the bot would do.
   online shop community, product links and prices are normal". With `judge_examples` on, the judge
   also sees up to three of the closest messages this group has taught it.
 - **Limits.** At most `judge_daily_cap` checks per group per day (500), `safety_daily_cap` safety
-  checks (300), and a shared daily cap across all of a permit holder's groups (1,500).
+  checks (300).
 - **Cost.** The system prompt is cached. In the 52,000-member group, 20 checks in 23 days cost
   about nine cents.
 - **Failures.** If Claude can't be reached, nothing is removed.
@@ -307,12 +307,11 @@ trigger `warn_action` (a one-day mute).
 
 ### Reports, notices and summaries
 
-Reports go to the group's `modlog_chat_id` if one is set, otherwise to the private chat of the
-permit holder who added the bot, otherwise to the owners' `MODLOG_CHAT_ID`. Each report says who,
-what and why, with **Why**, **Undo** and **Teach as spam** buttons. In enforce mode the group also
-sees a short notice that deletes itself after `notice_ttl`. Every group gets a daily summary at
-`digest_time`, and the owners get a server-wide one at 09:00; both use Asia/Manila time, set in
-`zyroguard/scheduler.py`. `/log`, `/why <number>` and `/stats` show the same history on demand.
+Reports go to the group's `modlog_chat_id` if one is set, otherwise to `MODLOG_CHAT_ID`. Each
+report says who, what and why, with **Why**, **Undo** and **Teach as spam** buttons. In enforce mode
+the group also sees a short notice that deletes itself after `notice_ttl`. Every group gets a daily
+summary at `digest_time`, in Asia/Manila time (set in `zyroguard/scheduler.py`). `/log`,
+`/why <number>` and `/stats` show the same history on demand.
 
 Members can reply `/report` to a message to forward it to the admins' report chat, once every 5
 minutes.
@@ -349,8 +348,8 @@ of files (up to about 16,000 characters) is sent whole with every question so no
 missed; larger ones are searched with the same meaning model as the spam check. Any link in an
 answer that isn't in the files or the contacts is removed before sending. An answered question
 costs about 2 cents. Unless the group has given the bot instructions, a question with nothing
-related in the files gets the can't-answer message without calling the AI at all. Only the bot owner, the permit holder, the group's creator or admins
-who can add new admins may change where members are sent for help, and every change is reported.
+related in the files gets the can't-answer message without calling the AI at all. Only the group's creator and
+admins who can add new admins may change where members are sent for help, and every change is reported.
 
 The full guide, including the weekly **Unanswered** list, is in
 [DOCUMENTATION.md](DOCUMENTATION.md#how-do-i-set-up-zyromod-in-my-telegram-group).
@@ -371,7 +370,6 @@ reply, an `@username` or a numeric id. Tagging the bot first (`@yourbot /ban`) w
 | Settings | `/settings`, `/settings list`, `/set <key> <value>`, `/unset <key>`, `/mode shadow\|enforce`, `/pause <time>`, `/resume`, plus shortcuts like `/setcaptchatime`, `/setflood` and `/setstrike` |
 | ZyroMod | `/zyromod` (files, email, button, instructions, test, unanswered questions, on and off) |
 | Checks | `/diag`, `/test <text>`, `/use` |
-| Owners | `/groups`, `/usage [time]`, `/permit`, `/revoke`, `/permits`, `/purge`, `/reloadrules`, `/addadmin`, `/removeadmin`, `/addmod`, `/removemod`, `/showadmin` |
 
 `/help` in a private chat opens a guide by topic, and `/help <command>` explains any command.
 
@@ -380,20 +378,12 @@ reply, an `@username` or a numeric id. Tagging the bot first (`@yourbot /ban`) w
 One ZyroGuard instance can guard many groups, each with its own settings, rules, examples and
 reports.
 
-- **Owners** (`OWNER_IDS`) can do everything in every group.
+- **Groups you add** from the account in `OWNER_IDS` are guarded and remembered.
 - **`ALLOWED_CHAT_IDS`** lists groups the bot always serves, whoever adds it.
-- **Permits** let other people use your instance for their own groups. `/permit @user [groups]
-  [days] [note]` (for example `/permit @ana 2 30d`) lets them add the bot to up to that many groups
-  where they are an admin, for that long. They run those groups from their private chat with the
-  bot, their reports go there, and their AI use shares one daily cap. `/permits` lists them all.
-  `/revoke @user` takes a permit back at once: the bot leaves their groups and deletes those
-  groups' records. When a permit runs out instead, the bot leaves but keeps the records until an
-  owner runs `/purge`, so a renewal picks up where it stopped.
 - **Group admins** of a guarded group automatically get the admin commands for it.
-- **Bot admins** (`/addadmin`, owner only) can run admin commands in one group without being a
-  Telegram admin there. **Trusted members** (`/allow`) are only skipped by the filters.
+- **Trusted members** (`/allow`) are skipped by the filters but get no commands.
 - **Contact the admin.** Anyone can tap the button or send `/contact` in a private chat to message
-  the owners, and `CONTACT_WEBHOOK_URL` can email a copy.
+  you, and `CONTACT_WEBHOOK_URL` can email a copy.
 
 ## Internal HTTP API
 
