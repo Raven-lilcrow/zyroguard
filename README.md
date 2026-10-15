@@ -11,6 +11,29 @@ In its first 23 days of enforcing in that community it took 403 automatic action
 none of them, and the AI was needed 20 times, for about nine cents in total. The
 [case study](case-study/CASE-STUDY.md) has the full story.
 
+## What it does for your group
+
+**ZyroGuard keeps your group safe.**
+
+- New members solve a quick picture puzzle before they can talk, and known spammers are blocked
+  the moment they join.
+- Scams, fake job offers, "earn $300 a day" pitches, fake support accounts and attempts to steal
+  accounts are removed before your members see them, in many languages.
+- Explicit, violent, hateful or harassing pictures and messages are removed.
+- Accounts that copy your group's name with lookalike letters are removed.
+- Your admins and trusted members are never touched, and the bot only acts when it is sure.
+- It starts in report-only mode, so you can check its choices for a few days before turning it on.
+- Every action comes with a report and three buttons: **Why**, **Undo** and **Teach as spam**.
+
+**ZyroMod answers your members (optional).**
+
+- Give it your FAQ, product guide or policies, and it answers members' questions from those files
+  only, in their own language. It never makes things up.
+- When your files don't have the answer, it sends members to your support email or help page.
+- It keeps a list of the questions it couldn't answer, so you know what to add.
+
+Everything is managed inside Telegram. There is no website to log into.
+
 ## How it works
 
 ZyroGuard reads every message in the groups it guards and decides in layers, cheapest first. Clear
