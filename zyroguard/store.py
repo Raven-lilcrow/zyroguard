@@ -966,6 +966,12 @@ class Store:
         await self.db.commit()
         return cur.rowcount > 0
 
+    async def disable_rule(self, rule_id: int) -> bool:
+        """Switch a rule off (kept in the table). True only for the call that switched it off."""
+        cur = await self.db.execute("UPDATE rules SET enabled=0 WHERE id=? AND enabled=1", (rule_id,))
+        await self.db.commit()
+        return cur.rowcount > 0
+
     async def list_rules(self, chat_id: int, include_global: bool = True) -> list[sqlite3.Row]:
         if include_global:
             cur = await self.db.execute(

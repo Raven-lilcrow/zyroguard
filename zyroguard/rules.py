@@ -8,17 +8,23 @@ handler decides what to do with it; this module never touches Telegram.
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
+import string
+import time
 import unicodedata
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+import regex as _regex   # custom rules only: unlike re it can stop a search after a time limit
 import yaml
 
 from .durations import Duration
 from .language import detect as detect_language, name as language_name
+
+log = logging.getLogger("zyroguard.rules")
 
 _ZERO_WIDTH = re.compile(r"[​‌‍⁠﻿­]")
 _URL = re.compile(r"(?i)\b(?:https?://|www\.)[^\s<>\"']+|\b[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:/[^\s<>\"']*)?")
@@ -127,7 +133,7 @@ def domain_matches(host: str, patterns: set[str]) -> bool:
 class HardRule:
     id: str
     desc: str
-    regex: re.Pattern[str]
+    regex: Any                        # re.Pattern; custom rules get a regex.Pattern so they can time out
     action: str | None = None         # None = strike ladder
     duration: Duration | None = None
     source: str = "yaml"              # yaml | chat | global
@@ -196,7 +202,97 @@ def load_rules(path: Path) -> RuleSet:
 
 MAX_PATTERN_LEN = 200
 _NESTED_QUANT = re.compile(r"\([^()]*[+*}|][^()]*\)\s*[+*{]|\([^()]*\)\s*[+*]\s*[+*]")
-_BACKREF = re.compile(r"\\[1-9]")
+_BACKREF = re.compile(r"\\[1-9]|\(\?P=")
+
+# Custom rules come from group admins, so they are matched with limits: only the start of the
+# message, a time limit per search, and a time budget for all of a group's rules on one message.
+CUSTOM_TEXT_CAP = 1000
+CUSTOM_TIMEOUT_S = 0.05
+CUSTOM_BUDGET_S = 0.2
+
+# pieces of a pattern, for spotting repeats that sit next to each other
+_QUANT = re.compile(r"[*+?]|\{(\d+)\}|\{(\d*),(\d*)\}")
+_GROUP_OPEN = re.compile(r"\(\?(?:[:=!]|<[=!]|P<\w+>|<\w+>|[aiLmsux]*(?:-[imsx]+)?[:)])|\(")
+_ESCAPE = re.compile(r"\\(?:x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8}|N\{[^}]*\}|0[0-7]{0,2}|.)", re.DOTALL)
+_CLASS = re.compile(r"\[\^?\]?(?:\\.|[^\]\\])*\]", re.DOTALL)
+_ANCHOR_ESCAPES = {r"\b", r"\B", r"\A", r"\Z"}
+_SAMPLE_CHARS = string.printable + "éßаяіع中😀​"
+_UNBOUNDED = 1 << 30
+
+
+def _bounds(q: re.Match[str]) -> tuple[int, int]:
+    """(min, max) repeats for a quantifier token."""
+    tok = q.group(0)
+    if tok in ("*", "+", "?"):
+        return {"*": (0, _UNBOUNDED), "+": (1, _UNBOUNDED), "?": (0, 1)}[tok]
+    if q.group(1) is not None:
+        return int(q.group(1)), int(q.group(1))
+    return int(q.group(2) or 0), int(q.group(3)) if q.group(3) else _UNBOUNDED
+
+
+def _chars_of(atom: str) -> frozenset[str]:
+    """Which sample characters one piece (a letter, an escape, a [class], '.') can match."""
+    try:
+        rx = re.compile(atom, re.IGNORECASE | re.DOTALL)
+    except re.error:
+        return frozenset()
+    return frozenset(c for c in _SAMPLE_CHARS if rx.fullmatch(c))
+
+
+def _overlapping_repeats(pattern: str) -> bool:
+    r"""True when two repeats that can match the same character follow each other with only
+    optional pieces between them: \s*\s*, [a-z]+[a-z]+, \w+\s*\w+. On a long run of such
+    characters the engine tries every way of splitting the run between them, and each extra
+    repeat multiplies the work. Groups are read through; a repeated group counts as a wall
+    (what is inside it is already checked by _NESTED_QUANT). A rough check: the time limit
+    in _custom_hit is what actually keeps a slow pattern from stalling the bot."""
+    live: list[frozenset[str]] = []   # repeats the next piece could directly follow
+    i, n = 0, len(pattern)
+    while i < n:
+        c = pattern[i]
+        if c == "|":
+            live = []
+            i += 1
+            continue
+        if c in "^$":
+            i += 1
+            continue
+        if c == "(":
+            if pattern.startswith("(?#", i):
+                j = pattern.find(")", i)
+                i = n if j < 0 else j + 1
+                continue
+            m = _GROUP_OPEN.match(pattern, i)
+            i = m.end() if m else i + 1
+            continue
+        if c == ")":
+            i += 1
+            q = _QUANT.match(pattern, i)
+            if q:
+                i = q.end() + (1 if q.end() < n and pattern[q.end()] in "?+" else 0)
+                live = []
+            continue
+        m = _ESCAPE.match(pattern, i) if c == "\\" else _CLASS.match(pattern, i) if c == "[" else None
+        atom = m.group(0) if m else c
+        i += len(atom)
+        if atom in _ANCHOR_ESCAPES:
+            continue
+        lo, hi, possessive = 1, 1, False
+        q = _QUANT.match(pattern, i)
+        if q:
+            lo, hi = _bounds(q)
+            i = q.end()
+            if i < n and pattern[i] in "?+":
+                possessive = pattern[i] == "+"
+                i += 1
+        if hi > 1 and not possessive:
+            chars = _chars_of(atom)
+            if any(chars & prev for prev in live):
+                return True
+            live = [*live, chars] if lo == 0 else [chars]
+        elif lo > 0:
+            live = []
+    return False
 
 
 def pattern_problem(pattern: str) -> str | None:
@@ -215,6 +311,9 @@ def pattern_problem(pattern: str) -> str | None:
         re.compile(pattern, re.IGNORECASE)
     except re.error as e:
         return f"That pattern is not valid: {e}."
+    if _overlapping_repeats(pattern):
+        return (r"That pattern has two repeats in a row that match the same characters (like \s*\s* "
+                "or [a-z]+[a-z]+), which can stall the bot. Use one repeat there.")
     return None
 
 
@@ -223,8 +322,8 @@ def compile_custom(rows: list[Any]) -> list[HardRule]:
     out = []
     for r in rows:
         try:
-            regex = re.compile(r["pattern"], re.IGNORECASE | re.DOTALL)
-        except re.error:
+            regex = _regex.compile(r["pattern"], _regex.IGNORECASE | _regex.DOTALL)
+        except _regex.error:
             continue
         dur = Duration(r["duration_s"]) if r["duration_s"] is not None else (
             Duration(None) if r["action"] in {"mute", "ban"} else None
@@ -291,6 +390,7 @@ class Context:
     protected_names: list[str] = field(default_factory=list)   # brand names only admins may use
     job_rules: bool = True             # fake-job / task-scam rules (rules marked only: jobs / no_jobs)
     phishing_rules: bool = True        # account-phishing rules (only: phishing)
+    slow_rules: list[HardRule] = field(default_factory=list)   # custom rules that ran out of time; filled by evaluate()
 
 
 RULE_PACKS = {"jobs": "job_rules", "phishing": "phishing_rules"}   # `only:` value -> Context switch
@@ -356,6 +456,31 @@ def brand_in_name(name: str, username: str | None, brands: list[str]) -> tuple[s
 _HANDLE = re.compile(r"(?<![\w@])@[A-Za-z0-9_]{5,32}")
 _CRYPTO_TOKEN = re.compile(r"(?<![a-z0-9])(usdt|usdc|btc|eth|trx|bnb|sol|crypto|binance|okx|bybit|trc20|erc20)(?![a-z0-9])")
 _PHONE = re.compile(r"\+?\d[\d\s-]{8,}\d")
+
+
+def _custom_hit(ctx: Context, texts: tuple[str, ...]) -> HardRule | None:
+    """The first custom rule that matches, within the time limits. A rule that runs out of its
+    own time limit counts as no match and goes on ctx.slow_rules for the caller to switch off;
+    when the shared budget runs out, the rules left are skipped for this message."""
+    deadline = time.monotonic() + CUSTOM_BUDGET_S
+    for rule in ctx.custom_rules:
+        if any(r.id == rule.id for r in ctx.slow_rules):
+            continue
+        for text in texts:
+            left = deadline - time.monotonic()
+            limit = min(CUSTOM_TIMEOUT_S, left)
+            try:
+                if limit > 0 and rule.regex.search(text, timeout=limit):
+                    return rule
+            except TimeoutError:
+                if limit >= CUSTOM_TIMEOUT_S:   # slow on its own, not just cut short by the budget
+                    log.warning("custom rule %s took over %d ms and was skipped", rule.id, CUSTOM_TIMEOUT_S * 1000)
+                    ctx.slow_rules.append(rule)
+                    break
+            if limit < CUSTOM_TIMEOUT_S and time.monotonic() >= deadline:
+                log.warning("custom rules ran out of time at %s, the rest were not checked", rule.id)
+                return None
+    return None
 
 
 def evaluate(msg: MessageView, rules: RuleSet, ctx: Context) -> Verdict:
@@ -440,9 +565,9 @@ def evaluate(msg: MessageView, rules: RuleSet, ctx: Context) -> Verdict:
         matched.append("mixed_script")
 
     # -- custom regex rules (chat + global) --------------------------------
-    for rule in ctx.custom_rules:
-        if rule.regex.search(folded) or rule.regex.search(raw):
-            return hard(f"custom rule: {rule.desc}", rule.id, rule.action, rule.duration)
+    rule = _custom_hit(ctx, (folded[:CUSTOM_TEXT_CAP], raw[:CUSTOM_TEXT_CAP]))
+    if rule:
+        return hard(f"custom rule: {rule.desc}", rule.id, rule.action, rule.duration)
 
     # -- yaml hard rules --------------------------------------------------
     for rule in rules.hard:

@@ -165,11 +165,9 @@ def test_repeat_wave():
 
 
 def test_custom_rule_override(tmp_path):
-    from zyroguard.rules import HardRule
-    import re
-    from zyroguard.durations import Duration
-    rule = HardRule("custom_1", "no cats", re.compile("cats"), action="ban", duration=Duration(3600), source="chat", db_id=1)
-    v = evaluate(old_member("I love cats"), RULES, Context(custom_rules=[rule]))
+    from zyroguard.rules import compile_custom
+    rules = compile_custom([{"id": 1, "chat_id": -100, "pattern": "cats", "action": "ban", "duration_s": 3600, "note": "no cats"}])
+    v = evaluate(old_member("I love cats"), RULES, Context(custom_rules=rules))
     assert v.kind == "hard" and v.action == "ban" and v.duration.seconds == 3600
 
 

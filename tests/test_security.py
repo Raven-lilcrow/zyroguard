@@ -48,6 +48,56 @@ def test_dangerous_patterns_are_refused():
     assert pattern_problem("x" * 201)
     assert pattern_problem(".*a.*b.*c")
     assert pattern_problem("(unclosed")
+    # repeats side by side that match the same characters (audit 2026-10-15, F-01)
+    assert pattern_problem(r"\s*\s*\s*\s*\s*x")
+    assert pattern_problem(r"[a-z]+[a-z]+[a-z]+[a-z]+\d")
+    assert pattern_problem(r"\w*\w*\w*\w*!")
+    assert pattern_problem(r"\w+\s*\w+!")         # \s* can match nothing, so the \w+ meet
+    assert pattern_problem("(?P<x>a)(?P=x)")
+    # the ordinary shapes still pass
+    for ok in (r"free\s*crypto", r"\w+\s+\w+", r"https?://\S+", r"(?i)(?:buy|sell)\s+usdt",
+               r"\d{3}-\d{4}", r"^\s*join\s*$", "(?i)usdt.*commission"):
+        assert pattern_problem(ok) is None, ok
+
+
+SLOW = r"[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+\d"   # refused today, but a rule saved before the fix could look like this
+
+
+def test_a_slow_custom_rule_cannot_hold_up_evaluate():
+    import time
+    from pathlib import Path
+    from zyroguard.rules import CUSTOM_BUDGET_S, Context, MessageView, compile_custom, evaluate, load_rules
+    rules = load_rules(Path(__file__).resolve().parents[1] / "zyroguard" / "rules.yaml")
+    rows = [{"id": i, "chat_id": CHAT, "pattern": SLOW, "action": "ban", "duration_s": None, "note": None}
+            for i in range(1, 11)]
+    rows.append({"id": 11, "chat_id": CHAT, "pattern": "hello", "action": "ban", "duration_s": None, "note": None})
+    ctx = Context(custom_rules=compile_custom(rows))
+    view = MessageView(text="a" * 4000, is_new_member=False)   # Telegram allows 4096
+    start = time.monotonic()
+    v = evaluate(view, rules, ctx)
+    took = time.monotonic() - start
+    assert took < CUSTOM_BUDGET_S + 0.5, took                    # was 13.7 s for one such rule on 100 characters
+    assert not v.matched or not v.matched[0].startswith("custom_")
+    assert ctx.slow_rules and all(r.regex.pattern == SLOW for r in ctx.slow_rules)
+
+    # a rule already found slow is skipped, so the next look at the same message is quick
+    ctx = Context(custom_rules=compile_custom(rows[:1] + rows[-1:]))
+    evaluate(view, rules, ctx)
+    assert [r.db_id for r in ctx.slow_rules] == [1]
+    view.text = "hello " + "a" * 4000
+    v = evaluate(view, rules, ctx)
+    assert v.kind == "hard" and v.matched[0] == "custom_11"
+
+
+async def test_a_slow_custom_rule_is_switched_off_and_the_admins_told(app):
+    from zyroguard.pipeline import process
+    from tests.test_pipeline_e2e import MODLOG
+    await app.store.add_rule(CHAT, SLOW, "ban", None, None, ADMIN)      # straight into the DB, past the guard
+    await process(app, msg("a" * 3000))
+    assert await app.store.list_rules(CHAT) == []
+    notes = [c[1][1] for c in app.bot.calls if c[0] == "send_message" and c[1][0] == MODLOG]
+    assert any("switched off" in n and "took too long" in n for n in notes), notes
+    assert "ban_chat_member" not in app.bot.names()
 
 
 @pytest.mark.asyncio

@@ -222,6 +222,8 @@ async def cmd_test(m: Message, app: App, command: CommandObject) -> None:
                        forwarded_from_channel=bool(src and src.forward_origin and getattr(src.forward_origin, "type", "") == "channel"),
                        via_bot=bool(src and src.via_bot))
     v = evaluate(view, app.rules, ctx)
+    if ctx.slow_rules:
+        await app.drop_slow_rules(cs, ctx)
     first = action_words(cs.raw("strike1"))
     jobs_on = cs.bool("job_rules")
     job = jobs_on and job_offer(v.matched) and (v.kind == "judge" or v.score < 100)

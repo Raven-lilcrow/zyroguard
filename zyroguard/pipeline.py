@@ -344,6 +344,8 @@ async def process(app: App, m: Message) -> bool:
                                                    app.rules.repeat_window_minutes * 60)
     ctx = await app.rule_context(cs)
     verdict = await _evaluate_with_meaning(app, cs, view, ctx, m)
+    if ctx.slow_rules:
+        await app.drop_slow_rules(cs, ctx)
     if verdict.kind == "clean":
         return True
     decision = await decide(app, m, cs, view, verdict)
@@ -450,7 +452,10 @@ async def _process_as_channel(app: App, m: Message) -> bool:
                        forwarded_from_channel=bool(m.forward_origin), media_type=media_type(m),
                        sender_name=sc.title or "", sender_username=sc.username, is_new_member=True,
                        is_edit=bool(m.edit_date), extra=extra_text(m))
-    verdict = evaluate(view, app.rules, await app.rule_context(cs))
+    ctx = await app.rule_context(cs)
+    verdict = evaluate(view, app.rules, ctx)
+    if ctx.slow_rules:
+        await app.drop_slow_rules(cs, ctx)
     if verdict.kind != "hard":
         return True
     target = Target(chat_id, None, sc.username, f"channel: {sc.title or sc.id}", m.message_id, text,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 import time
 from collections import deque
@@ -260,6 +261,27 @@ class App:
             job_rules=cs.bool("job_rules"),
             phishing_rules=cs.bool("phishing_rules"),
         )
+
+    async def drop_slow_rules(self, cs: ChatSettings, ctx: Context) -> None:
+        """Switch off the custom rules evaluate() found too slow and tell the group's admins.
+        A slow pattern holds up every group the bot serves, so it is not given a second try."""
+        for rule in ctx.slow_rules:
+            if rule.db_id is None or not await self.store.disable_rule(rule.db_id):
+                continue
+            log.warning("switched off slow custom rule %s in %s", rule.db_id, cs.chat_id)
+            await self.store.log_error("custom_rule", f"rule {rule.db_id} timed out and was switched off", cs.chat_id)
+            if rule.source == "global":
+                continue   # the bot owner's rule; the errors log above is where they look
+            chat = await self.store.get_chat(cs.chat_id)
+            title = html.escape(chat["title"] if chat and chat["title"] else str(cs.chat_id))
+            await self.enforcer.notify(cs, "\n".join([
+                f"⚠️ <b>{title}</b> · custom rule switched off",
+                f"<b>Rule {rule.db_id} took too long to check a message, so I turned it off.</b>",
+                f"<code>{html.escape(rule.regex.pattern)}</code>",
+                "",
+                "A slow rule holds up the bot in every group, so it cannot stay on.",
+                "Try a simpler version with /rule add, plain words work best: /rule add free crypto",
+            ]))
 
     async def is_exempt(self, chat_id: int, user_id: int) -> bool:
         if user_id == self.bot_id or self.config.is_owner(user_id):

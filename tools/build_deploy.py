@@ -40,10 +40,10 @@ guard = r'''
 NEW=/tmp/zgnew
 cd /opt/zyroguard
 EXPECTED=" @EXPECTED@ "
-for f in requirements.txt Dockerfile; do
-  cmp -s <(tr -d '\r' < "$f") "$NEW/$f" || { echo "UNEXPECTED difference in $f: aborting, nothing was changed"; rm -rf "$NEW"; exit 3; }
-done
 changed=""
+for f in requirements.txt Dockerfile; do   # may differ only when named, e.g. a new dependency
+  cmp -s <(tr -d '\r' < "$f") "$NEW/$f" || changed="$changed $f"
+done
 for f in $(cd "$NEW" && find zyroguard -type f \( -name '*.py' -o -name '*.yaml' \) | sort); do
   if [ ! -f "$f" ] || ! cmp -s <(tr -d '\r' < "$f") "$NEW/$f"; then changed="$changed $f"; fi
 done
