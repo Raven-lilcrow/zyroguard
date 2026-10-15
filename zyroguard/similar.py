@@ -273,11 +273,11 @@ class Library:
             await self._reload()
         return promoted
 
-    async def forget(self, example_id: int) -> bool:
+    async def forget(self, example_id: int, by: int | None = None) -> bool:
         row = await self.store.example_get(example_id)
         if row is None or not (row["active"] or row["held_until"]):
             return False
-        await self.store.example_deactivate(example_id)
+        await self.store.example_deactivate(example_id, by)
         await self._reload()
         return True
 

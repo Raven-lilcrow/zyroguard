@@ -1021,7 +1021,7 @@ async def cb_support(cb: CallbackQuery, app: App) -> None:
             pass
         return
     if action == "rd" and extra:
-        name = await app.store.kb_delete_document(chat_id, int(extra))
+        name = await app.store.kb_delete_document(chat_id, int(extra), uid)
         if app.kb:
             app.kb.invalidate(chat_id)
         note = f"Removed {name}." if name else "That file was already gone."
@@ -1042,7 +1042,7 @@ async def cb_support(cb: CallbackQuery, app: App) -> None:
             pass
         return
     if action == "dk":
-        n = await app.store.kb_delete_all(chat_id)
+        n = await app.store.kb_delete_all(chat_id, uid)
         if app.kb:
             app.kb.invalidate(chat_id)
         await app.settings.set(chat_id, "support", "off", uid)
@@ -1059,7 +1059,7 @@ async def cb_support(cb: CallbackQuery, app: App) -> None:
             await cb.answer("The email is needed while support is on. Turn support off first.", show_alert=True)
             return
         old = cs.raw("support_email")
-        await app.settings.reset(chat_id, "support_email")
+        await app.settings.reset(chat_id, "support_email", uid)
         await report_change(app, chat_id, "support_email", old, "", cb.from_user)
         _wizard.pop(uid, None)
         await cb.answer("Email removed.")
@@ -1072,7 +1072,7 @@ async def cb_support(cb: CallbackQuery, app: App) -> None:
         return
     if action == "lx":
         old = cs.raw("support_link")
-        await app.settings.reset(chat_id, "support_link")
+        await app.settings.reset(chat_id, "support_link", uid)
         await report_change(app, chat_id, "support_link", old, "", cb.from_user)
         _wizard.pop(uid, None)
         await cb.answer("Contact button removed.")
@@ -1097,7 +1097,7 @@ async def cb_support(cb: CallbackQuery, app: App) -> None:
         return
     if action == "td":
         old = cs.raw("support_text")
-        await app.settings.reset(chat_id, "support_text")
+        await app.settings.reset(chat_id, "support_text", uid)
         await report_change(app, chat_id, "support_text", old, "", cb.from_user)
         _wizard.pop(uid, None)
         await cb.answer("Back to the default message.")
@@ -1120,7 +1120,7 @@ async def cb_support(cb: CallbackQuery, app: App) -> None:
         return
     if action == "rx":
         old = cs.raw("support_instructions")
-        await app.settings.reset(chat_id, "support_instructions")
+        await app.settings.reset(chat_id, "support_instructions", uid)
         await report_change(app, chat_id, "support_instructions", old, "", cb.from_user)
         _wizard.pop(uid, None)
         await cb.answer("Instructions removed. I use my defaults again.")

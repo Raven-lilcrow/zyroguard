@@ -33,8 +33,8 @@ from aiogram.types import Update  # noqa: E402
 LOCAL = os.environ.get("E2E_LOCAL") == "1"
 env = dict(os.environ)
 for k in ("N8N_EVENT_URL", "N8N_EVENT_SECRET", "MODLOG_CHAT_ID", "CONTACT_WEBHOOK_URL", "CONTACT_WEBHOOK_SECRET",
-          "ALLOWED_CHAT_IDS"):
-    env.pop(k, None)   # nothing may leave the test: no n8n events, no mod-log group, no contact webhook
+          "ALLOWED_CHAT_IDS", "OWNER_LEDGER_URL", "OWNER_LEDGER_SECRET"):
+    env.pop(k, None)   # nothing may leave the test: no n8n events, no mod-log group, no contact webhook, no owner sheet
 env["BOT_TOKEN"] = "4242:FAKE-token-for-the-end-to-end-test"
 env["DB_PATH"] = os.environ.get("E2E_DB", "/tmp/e2e_newgroup.db")
 if LOCAL:

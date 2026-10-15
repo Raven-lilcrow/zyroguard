@@ -68,6 +68,8 @@ class Config:
     contact_email: str | None
     contact_webhook_url: str | None
     contact_webhook_secret: str | None
+    owner_ledger_url: str | None
+    owner_ledger_secret: str | None
     db_path: Path
     rules_path: Path
     http_host: str
@@ -114,6 +116,8 @@ def load_config(env: dict[str, str] | None = None) -> Config:
         contact_email=e.get("CONTACT_EMAIL", "").strip() or None,
         contact_webhook_url=e.get("CONTACT_WEBHOOK_URL", "").strip() or None,
         contact_webhook_secret=e.get("CONTACT_WEBHOOK_SECRET", "").strip() or None,
+        owner_ledger_url=e.get("OWNER_LEDGER_URL", "").strip() or None,
+        owner_ledger_secret=e.get("OWNER_LEDGER_SECRET", "").strip() or None,
         db_path=Path(e.get("DB_PATH", "/data/zyroguard.db")),
         rules_path=Path(e.get("RULES_PATH", str(here / "rules.yaml"))),
         http_host=e.get("HTTP_HOST", "0.0.0.0"),

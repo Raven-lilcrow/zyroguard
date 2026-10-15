@@ -214,7 +214,11 @@ async def send_digests(app: App, sent_today: set[tuple[int, str]]) -> None:
 
 async def drop_ended_permits(app: App) -> int:
     """Leave the groups of customers whose permit was revoked or ran out. Records stay
-    until the owner runs /purge, so a renewal does not start from zero."""
+    until the owner runs /purge, so a renewal does not start from zero. Runs every 5 minutes;
+    app.chat_allowed already stops serving such a group the moment its access ends."""
+    from . import ledger
+    await app.refresh_access()
+    ended: dict[int, list[str]] = {}
     left = 0
     for chat in await app.store.list_chats():
         owner = chat["owner_user_id"]
@@ -234,6 +238,8 @@ async def drop_ended_permits(app: App) -> int:
             pass
         await app.store.deactivate_chat(chat_id)
         app.allowed_chats.discard(chat_id)
+        ended.setdefault(int(owner), []).append(chat["title"] or str(chat_id))
+        await ledger.note(app, "bot_left", chat_id, target=int(owner), title=chat["title"])
         try:
             from .contact import contact_button
             await app.bot.send_message(int(owner), f"Your permit ended, so I left {chat['title'] or chat_id}. "
@@ -242,7 +248,32 @@ async def drop_ended_permits(app: App) -> int:
             pass
         left += 1
         log.info("left %s (%s): permit of %s ended", chat["title"], chat_id, owner)
+    # one "access expired" record (and owner alert) per ended permit, groups or not
+    for p in await app.store.list_permits():
+        if not p["active"] or not p["expires_at"] or (from_iso(p["expires_at"]) or utcnow()) > utcnow():
+            continue
+        key = f"expired:{p['user_id']}:{p['expires_at']}"
+        if await app.store.ledger_get(key) is not None:
+            continue
+        await app.store.ledger_set(key, utcnow().isoformat())
+        await ledger.note(app, "access_expired", None, target=int(p["user_id"]),
+                          groups=ended.get(int(p["user_id"]), []), username=p["username"])
     return left
+
+
+async def _ledger_tick(app: App, tick: int) -> None:
+    """The owner's activity record: send events every minute; daily summaries and the month-end
+    snapshot are checked every 5 minutes; Groups and Access are rewritten every hour."""
+    from . import ledger
+    try:
+        if tick % 15 == 0:
+            await ledger.daily_summaries(app)
+            await ledger.month_end(app)
+        await ledger.flush(app)
+        if tick % 180 == 0:
+            await ledger.snapshot(app)
+    except Exception as e:  # noqa: BLE001
+        log.warning("activity record tick failed: %s", e)
 
 
 async def run(app: App, interval: float = 20.0) -> None:
@@ -258,12 +289,14 @@ async def run(app: App, interval: float = 20.0) -> None:
             if tick % 3 == 0:
                 await send_digests(app, sent_today)
                 await send_overall_digest(app, sent_today)
+                await _ledger_tick(app, tick)
             if tick % 15 == 0 and app.similar is not None:
                 promoted = await app.similar.promote_due()
                 if promoted:
                     log.info("meaning match: %d held examples now count", promoted)
-            if tick % 180 == 0:
+            if tick % 15 == 0:
                 await drop_ended_permits(app)
+            if tick % 180 == 0:
                 purged = await app.store.purge_expired_strikes()
                 if purged:
                     log.info("purged %d expired strikes", purged)

@@ -402,8 +402,8 @@ class SettingsService:
         self._cache.setdefault(chat_id, {})[key] = value
         return value
 
-    async def reset(self, chat_id: int, key: str) -> None:
-        await self.store.delete_setting(chat_id, key)
+    async def reset(self, chat_id: int, key: str, by: int | None = None) -> None:
+        await self.store.delete_setting(chat_id, key, by)
         self._cache.get(chat_id, {}).pop(key, None)
 
     def invalidate(self, chat_id: int) -> None:

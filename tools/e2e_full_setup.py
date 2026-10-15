@@ -38,8 +38,8 @@ LOCAL = os.environ.get("E2E_LOCAL") == "1"
 FILES = Path(os.environ.get("E2E_FILES", HERE.parent / "client-kit" / "test-group"))
 env = dict(os.environ)
 for k in ("N8N_EVENT_URL", "N8N_EVENT_SECRET", "MODLOG_CHAT_ID", "CONTACT_WEBHOOK_URL", "CONTACT_WEBHOOK_SECRET",
-          "ALLOWED_CHAT_IDS"):
-    env.pop(k, None)   # nothing may leave the test
+          "ALLOWED_CHAT_IDS", "OWNER_LEDGER_URL", "OWNER_LEDGER_SECRET"):
+    env.pop(k, None)   # nothing may leave the test (the owner sheet included)
 env["BOT_TOKEN"] = "4242:FAKE-token-for-the-end-to-end-test"
 env["DB_PATH"] = os.environ.get("E2E_DB", "/tmp/e2e_full_setup.db")
 if LOCAL:

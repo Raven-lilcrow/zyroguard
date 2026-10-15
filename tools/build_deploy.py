@@ -64,8 +64,11 @@ docker exec zyroguard rm -f /data/backup.db
 chmod 600 /opt/zyroguard/backup/zyroguard-*.db
 ls -la /opt/zyroguard/backup | tail -2
 mkdir -p /opt/zyroguard/pre-@NAME@
-for f in $changed; do cp "$f" /opt/zyroguard/pre-@NAME@/; done
-echo "saved the live copies of the changed files in /opt/zyroguard/pre-@NAME@"
+: > /opt/zyroguard/pre-@NAME@/new-files.txt   # files the server didn't have: a rollback deletes these
+for f in $changed; do
+  if [ -f "$f" ]; then cp "$f" /opt/zyroguard/pre-@NAME@/; else echo "$f" >> /opt/zyroguard/pre-@NAME@/new-files.txt; fi
+done
+echo "saved the live copies of the changed files in /opt/zyroguard/pre-@NAME@ (new files: $(wc -l < /opt/zyroguard/pre-@NAME@/new-files.txt))"
 
 echo "== tag rollback image"
 docker tag zyroguard-zyroguard:latest zyroguard:prev

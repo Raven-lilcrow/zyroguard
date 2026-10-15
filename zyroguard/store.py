@@ -280,6 +280,29 @@ CREATE TABLE IF NOT EXISTS kb_questions (
     best        REAL
 );
 CREATE INDEX IF NOT EXISTS idx_kb_questions_chat ON kb_questions(chat_id, ts);
+
+-- The owner's activity record (ledger.py): groups added or refused, access changes, what admins
+-- did and changed. Kept when a group is purged. sent_at is set once the owner webhook took it.
+CREATE TABLE IF NOT EXISTS owner_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts          TEXT NOT NULL,
+    kind        TEXT NOT NULL,
+    chat_id     INTEGER,
+    actor_id    INTEGER,          -- who did it (None: the bot itself)
+    actor_name  TEXT,
+    target_id   INTEGER,          -- who it was done to, or whose access
+    target_name TEXT,
+    detail      TEXT,             -- JSON
+    sent_at     TEXT,
+    attempts    INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_owner_events_unsent ON owner_events(sent_at, id);
+
+-- Small bookkeeping for ledger.py: which daily summaries and month-end snapshots are done.
+CREATE TABLE IF NOT EXISTS ledger_state (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
 
 # tables that hold per-group rows, for /purge
@@ -345,6 +368,10 @@ class Store:
         cols = {r[1] for r in await cur.fetchall()}
         if "owner_user_id" not in cols:
             await self._db.execute("ALTER TABLE chats ADD COLUMN owner_user_id INTEGER")
+        # who added the bot (2026-10): groups added earlier have no record of it
+        for col, kind in (("added_by", "INTEGER"), ("added_by_name", "TEXT")):
+            if col not in cols:
+                await self._db.execute(f"ALTER TABLE chats ADD COLUMN {col} {kind}")
         # learning from confident catches (2026-10): examples created before it lack these
         cur = await self._db.execute("PRAGMA table_info(examples)")
         cols = {r[1] for r in await cur.fetchall()}
@@ -368,8 +395,11 @@ class Store:
             "VALUES(?,?,?,?,?,?,?,?,?,?,?)",
             (chat_id, label, text, vector, model, source, by, iso(utcnow()), int(held_until is None), audit_id,
              iso(held_until)))
+        new_id = int(cur.lastrowid)
+        if by is not None and source in {"admin", "undo"}:   # taught by a person; message text stays out
+            await self._note("teach", chat_id, by, label=label, example=new_id, via=source)
         await self.db.commit()
-        return int(cur.lastrowid)
+        return new_id
 
     async def examples_active(self, model: str) -> list[sqlite3.Row]:
         cur = await self.db.execute("SELECT id, chat_id, label, vector FROM examples WHERE active=1 AND model=?", (model,))
@@ -431,8 +461,13 @@ class Store:
         cur = await self.db.execute("SELECT * FROM examples WHERE id=?", (example_id,))
         return await cur.fetchone()
 
-    async def example_deactivate(self, example_id: int) -> None:
+    async def example_deactivate(self, example_id: int, by: int | None = None) -> None:
         await self.db.execute("UPDATE examples SET active=0, held_until=NULL WHERE id=?", (example_id,))
+        if by is not None:
+            cur = await self.db.execute("SELECT chat_id, label FROM examples WHERE id=?", (example_id,))
+            row = await cur.fetchone()
+            await self._note("forget", int(row["chat_id"]) if row else None, by, example=example_id,
+                             label=row["label"] if row else None)
         await self.db.commit()
 
     async def examples_empty(self) -> bool:
@@ -460,6 +495,8 @@ class Store:
             await self.db.executemany(
                 "INSERT INTO kb_chunks(chat_id,doc_id,seq,heading,text,vector,model) VALUES(?,?,?,?,?,?,?)",
                 [(chat_id, doc_id, seq, heading, text, vec, model) for seq, heading, text, vec in chunks])
+            await self._note("file_add", chat_id, by, file=name, sections=len(chunks), pages=pages, chars=chars,
+                             replaced=bool(old))
             await self.db.commit()
         except Exception:
             await self.db.rollback()
@@ -488,7 +525,7 @@ class Store:
         cur = await self.db.execute("SELECT COALESCE(SUM(chars),0) FROM kb_documents WHERE chat_id=?", (chat_id,))
         return int((await cur.fetchone())[0])
 
-    async def kb_delete_document(self, chat_id: int, doc_id: int) -> str | None:
+    async def kb_delete_document(self, chat_id: int, doc_id: int, by: int | None = None) -> str | None:
         """Returns the removed file's name, or None when it was not this group's."""
         cur = await self.db.execute("SELECT name FROM kb_documents WHERE id=? AND chat_id=?", (doc_id, chat_id))
         row = await cur.fetchone()
@@ -496,13 +533,16 @@ class Store:
             return None
         await self.db.execute("DELETE FROM kb_chunks WHERE doc_id=?", (doc_id,))
         await self.db.execute("DELETE FROM kb_documents WHERE id=?", (doc_id,))
+        await self._note("file_remove", chat_id, by, file=str(row["name"]))
         await self.db.commit()
         return str(row["name"])
 
-    async def kb_delete_all(self, chat_id: int) -> int:
+    async def kb_delete_all(self, chat_id: int, by: int | None = None) -> int:
         cur = await self.db.execute("DELETE FROM kb_documents WHERE chat_id=?", (chat_id,))
         n = cur.rowcount or 0
         await self.db.execute("DELETE FROM kb_chunks WHERE chat_id=?", (chat_id,))
+        if n:
+            await self._note("files_clear", chat_id, by, files=n)
         await self.db.commit()
         return n
 
@@ -603,6 +643,88 @@ class Store:
         row = await self.get_chat(chat_id)
         return int(row["owner_user_id"]) if row and row["owner_user_id"] else None
 
+    async def set_chat_added_by(self, chat_id: int, user_id: int | None, name: str | None) -> None:
+        await self.db.execute("UPDATE chats SET added_by=?, added_by_name=? WHERE chat_id=?", (user_id, name, chat_id))
+        await self.db.commit()
+
+    # ---- the owner's activity record (ledger.py) ----------------------------
+
+    async def _note(self, kind: str, chat_id: int | None, actor_id: int | None, *, actor_name: str | None = None,
+                    target_id: int | None = None, target_name: str | None = None, **detail: Any) -> None:
+        """Add one activity row inside the caller's transaction (the caller commits)."""
+        await self.db.execute(
+            "INSERT INTO owner_events(ts,kind,chat_id,actor_id,actor_name,target_id,target_name,detail) "
+            "VALUES(?,?,?,?,?,?,?,?)",
+            (iso(utcnow()), kind, chat_id, actor_id, actor_name, target_id, target_name,
+             json.dumps(detail, ensure_ascii=False, default=str)))
+
+    async def owner_event_add(self, kind: str, chat_id: int | None = None, actor_id: int | None = None, *,
+                              actor_name: str | None = None, target_id: int | None = None,
+                              target_name: str | None = None, ts: datetime | None = None, **detail: Any) -> int:
+        cur = await self.db.execute(
+            "INSERT INTO owner_events(ts,kind,chat_id,actor_id,actor_name,target_id,target_name,detail) "
+            "VALUES(?,?,?,?,?,?,?,?)",
+            (iso(ts or utcnow()), kind, chat_id, actor_id, actor_name, target_id, target_name,
+             json.dumps(detail, ensure_ascii=False, default=str)))
+        await self.db.commit()
+        return int(cur.lastrowid or 0)
+
+    async def owner_events_unsent(self, limit: int = 300) -> list[sqlite3.Row]:
+        cur = await self.db.execute("SELECT * FROM owner_events WHERE sent_at IS NULL ORDER BY id LIMIT ?", (limit,))
+        return list(await cur.fetchall())
+
+    async def owner_events_mark(self, ids: list[int], sent: bool) -> None:
+        if not ids:
+            return
+        marks = ",".join("?" * len(ids))
+        if sent:
+            await self.db.execute(f"UPDATE owner_events SET sent_at=? WHERE id IN ({marks})", (iso(utcnow()), *ids))
+        else:
+            await self.db.execute(f"UPDATE owner_events SET attempts=attempts+1 WHERE id IN ({marks})", ids)
+        await self.db.commit()
+
+    async def owner_events_since(self, since: datetime, limit: int = 40) -> list[sqlite3.Row]:
+        cur = await self.db.execute(
+            "SELECT * FROM owner_events WHERE ts >= ? ORDER BY id DESC LIMIT ?", (iso(since), limit))
+        return list(await cur.fetchall())
+
+    async def owner_events_count_unsent(self) -> int:
+        cur = await self.db.execute("SELECT COUNT(*) AS n FROM owner_events WHERE sent_at IS NULL")
+        row = await cur.fetchone()
+        return int(row["n"]) if row else 0
+
+    async def ledger_get(self, key: str) -> str | None:
+        cur = await self.db.execute("SELECT value FROM ledger_state WHERE key=?", (key,))
+        row = await cur.fetchone()
+        return str(row["value"]) if row else None
+
+    async def ledger_set(self, key: str, value: str) -> None:
+        await self.db.execute("INSERT INTO ledger_state(key,value) VALUES(?,?) "
+                              "ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, value))
+        await self.db.commit()
+
+    async def audit_between(self, start: datetime, end: datetime) -> list[sqlite3.Row]:
+        """Raw audit rows in a time window, for the daily summary."""
+        cur = await self.db.execute("SELECT * FROM audit WHERE ts >= ? AND ts < ?", (iso(start), iso(end)))
+        return list(await cur.fetchall())
+
+    async def count_between(self, table: str, chat_id: int, start: datetime, end: datetime,
+                            ts_col: str = "ts", extra: str = "", params: tuple = ()) -> int:
+        assert table in {"judge_usage", "kb_questions", "members", "audit"} and ts_col.isidentifier()
+        cur = await self.db.execute(
+            f"SELECT COUNT(*) AS n FROM {table} WHERE chat_id=? AND {ts_col} >= ? AND {ts_col} < ? {extra}",
+            (chat_id, iso(start), iso(end), *params))
+        row = await cur.fetchone()
+        return int(row["n"]) if row else 0
+
+    async def chat_last_times(self, chat_id: int) -> tuple[datetime | None, datetime | None]:
+        """(last member message, last logged action) in a group."""
+        cur = await self.db.execute("SELECT MAX(last_msg_at) AS m FROM members WHERE chat_id=?", (chat_id,))
+        last_msg = (await cur.fetchone())["m"]
+        cur = await self.db.execute("SELECT MAX(ts) AS m FROM audit WHERE chat_id=?", (chat_id,))
+        last_action = (await cur.fetchone())["m"]
+        return from_iso(last_msg), from_iso(last_action)
+
     async def chats_owned_by(self, user_id: int, active_only: bool = True) -> list[sqlite3.Row]:
         q = "SELECT * FROM chats WHERE owner_user_id=?" + (" AND active=1" if active_only else "")
         cur = await self.db.execute(q + " ORDER BY added_at", (user_id,))
@@ -666,6 +788,18 @@ class Store:
         return bool(cur.rowcount)
 
 
+    async def known_name(self, user_id: int) -> tuple[str | None, str | None]:
+        """(display name, username) from the latest group message this person sent, if any."""
+        cur = await self.db.execute(
+            "SELECT display_name, username FROM members WHERE user_id=? "
+            "ORDER BY (display_name IS NULL), last_msg_at DESC LIMIT 1", (user_id,))
+        row = await cur.fetchone()
+        if row:
+            return row["display_name"], row["username"]
+        cur = await self.db.execute("SELECT username FROM permits WHERE user_id=?", (user_id,))
+        row = await cur.fetchone()
+        return None, (row["username"] if row else None)
+
     async def get_permit(self, user_id: int) -> sqlite3.Row | None:
         cur = await self.db.execute("SELECT * FROM permits WHERE user_id=?", (user_id,))
         return await cur.fetchone()
@@ -710,19 +844,30 @@ class Store:
         )
         return {r["key"]: r["value"] for r in await cur.fetchall()}
 
+    async def _setting_value(self, chat_id: int, key: str) -> str | None:
+        cur = await self.db.execute("SELECT value FROM chat_settings WHERE chat_id=? AND key=?", (chat_id, key))
+        row = await cur.fetchone()
+        return str(row["value"]) if row else None
+
     async def set_setting(self, chat_id: int, key: str, value: str, by: int | None) -> None:
+        old = await self._setting_value(chat_id, key)
         await self.db.execute(
             "INSERT INTO chat_settings(chat_id,key,value,updated_at,updated_by) VALUES(?,?,?,?,?) "
             "ON CONFLICT(chat_id,key) DO UPDATE SET value=excluded.value, "
             "updated_at=excluded.updated_at, updated_by=excluded.updated_by",
             (chat_id, key, value, iso(utcnow()), by),
         )
+        if old != value:
+            await self._note("setting", chat_id, by, key=key, old=old, new=value)
         await self.db.commit()
 
-    async def delete_setting(self, chat_id: int, key: str) -> None:
+    async def delete_setting(self, chat_id: int, key: str, by: int | None = None) -> None:
+        old = await self._setting_value(chat_id, key)
         await self.db.execute(
             "DELETE FROM chat_settings WHERE chat_id=? AND key=?", (chat_id, key)
         )
+        if old is not None:
+            await self._note("setting_reset", chat_id, by, key=key, old=old, new=None)
         await self.db.commit()
 
     # ---- members ---------------------------------------------------------
@@ -866,16 +1011,20 @@ class Store:
     # ---- allow lists -----------------------------------------------------
 
     async def allow_user(self, chat_id: int, user_id: int, by: int | None) -> None:
-        await self.db.execute(
+        cur = await self.db.execute(
             "INSERT OR IGNORE INTO allow_users(chat_id,user_id,added_by,added_at) VALUES(?,?,?,?)",
             (chat_id, user_id, by, iso(utcnow())),
         )
+        if cur.rowcount:
+            await self._note("trusted_add", chat_id, by, target_id=user_id)
         await self.db.commit()
 
-    async def disallow_user(self, chat_id: int, user_id: int) -> bool:
+    async def disallow_user(self, chat_id: int, user_id: int, by: int | None = None) -> bool:
         cur = await self.db.execute(
             "DELETE FROM allow_users WHERE chat_id=? AND user_id=?", (chat_id, user_id)
         )
+        if cur.rowcount:
+            await self._note("trusted_remove", chat_id, by, target_id=user_id)
         await self.db.commit()
         return cur.rowcount > 0
 
@@ -894,16 +1043,20 @@ class Store:
     # ---- bot admins (owner-granted, per group) ----------------------------
 
     async def add_bot_admin(self, chat_id: int, user_id: int, by: int | None) -> None:
-        await self.db.execute(
+        cur = await self.db.execute(
             "INSERT OR IGNORE INTO bot_admins(chat_id,user_id,added_by,added_at) VALUES(?,?,?,?)",
             (chat_id, user_id, by, iso(utcnow())),
         )
+        if cur.rowcount:
+            await self._note("botadmin_add", chat_id, by, target_id=user_id)
         await self.db.commit()
 
-    async def remove_bot_admin(self, chat_id: int, user_id: int) -> bool:
+    async def remove_bot_admin(self, chat_id: int, user_id: int, by: int | None = None) -> bool:
         cur = await self.db.execute(
             "DELETE FROM bot_admins WHERE chat_id=? AND user_id=?", (chat_id, user_id)
         )
+        if cur.rowcount:
+            await self._note("botadmin_remove", chat_id, by, target_id=user_id)
         await self.db.commit()
         return cur.rowcount > 0
 
@@ -924,16 +1077,20 @@ class Store:
         await self.db.execute(
             "DELETE FROM domains WHERE chat_id=? AND domain=? AND kind=?", (chat_id, domain, other)
         )
-        await self.db.execute(
+        cur = await self.db.execute(
             "INSERT OR IGNORE INTO domains(chat_id,domain,kind,added_by,added_at) VALUES(?,?,?,?,?)",
             (chat_id, domain.lower(), kind, by, iso(utcnow())),
         )
+        if cur.rowcount:
+            await self._note(f"domain_{kind}", chat_id, by, domain=domain.lower())
         await self.db.commit()
 
-    async def remove_domain(self, chat_id: int, domain: str) -> bool:
+    async def remove_domain(self, chat_id: int, domain: str, by: int | None = None) -> bool:
         cur = await self.db.execute(
             "DELETE FROM domains WHERE chat_id=? AND domain=?", (chat_id, domain.lower())
         )
+        if cur.rowcount:
+            await self._note("domain_remove", chat_id, by, domain=domain.lower())
         await self.db.commit()
         return cur.rowcount > 0
 
@@ -956,19 +1113,30 @@ class Store:
             "INSERT INTO rules(chat_id,pattern,action,duration_s,note,added_by,added_at) VALUES(?,?,?,?,?,?,?)",
             (chat_id, pattern, action, duration_s, note, by, iso(utcnow())),
         )
+        rule_id = int(cur.lastrowid or 0)
+        await self._note("rule_add", chat_id, by, rule=rule_id, pattern=pattern, action=action, duration_s=duration_s)
         await self.db.commit()
-        return int(cur.lastrowid or 0)
+        return rule_id
 
-    async def delete_rule(self, chat_id: int, rule_id: int) -> bool:
+    async def delete_rule(self, chat_id: int, rule_id: int, by: int | None = None) -> bool:
+        cur = await self.db.execute("SELECT pattern FROM rules WHERE id=? AND chat_id=?", (rule_id, chat_id))
+        row = await cur.fetchone()
         cur = await self.db.execute(
             "DELETE FROM rules WHERE id=? AND chat_id=?", (rule_id, chat_id)
         )
+        if cur.rowcount:
+            await self._note("rule_delete", chat_id, by, rule=rule_id, pattern=row["pattern"] if row else None)
         await self.db.commit()
         return cur.rowcount > 0
 
     async def disable_rule(self, rule_id: int) -> bool:
         """Switch a rule off (kept in the table). True only for the call that switched it off."""
         cur = await self.db.execute("UPDATE rules SET enabled=0 WHERE id=? AND enabled=1", (rule_id,))
+        if cur.rowcount:
+            cur2 = await self.db.execute("SELECT chat_id, pattern FROM rules WHERE id=?", (rule_id,))
+            row = await cur2.fetchone()
+            await self._note("rule_off", int(row["chat_id"]) if row else None, None, rule=rule_id,
+                             pattern=row["pattern"] if row else None)
         await self.db.commit()
         return cur.rowcount > 0
 
@@ -1037,8 +1205,12 @@ class Store:
                 duration_s, iso(expires_at), mode, actor_id,
             ),
         )
+        audit_id = int(cur.lastrowid or 0)
+        if actor_id is not None:   # an admin did this by hand; the bot's own actions go in the daily summary
+            await self._note("admin_action", chat_id, actor_id, target_id=user_id, target_name=username,
+                             action=action, duration_s=duration_s, reason=reason, mode=mode, ref=audit_id)
         await self.db.commit()
-        return int(cur.lastrowid or 0)
+        return audit_id
 
     def _row_to_audit(self, r: sqlite3.Row) -> AuditRow:
         try:
@@ -1096,6 +1268,10 @@ class Store:
         await self.db.execute(
             "UPDATE audit SET undone_at=?, undone_by=? WHERE id=?", (iso(utcnow()), by, audit_id)
         )
+        row = await self.get_audit(audit_id)
+        if row:
+            await self._note("undo", row.chat_id, by, target_id=row.user_id, target_name=row.username,
+                             action=row.action, reason=row.reason, source=row.source, ref=audit_id)
         await self.db.commit()
 
 

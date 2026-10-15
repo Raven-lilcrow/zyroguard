@@ -603,7 +603,7 @@ async def cmd_forget(m: Message, app: App, command: CommandObject) -> None:
     if not allowed:
         await reply_temp(m, app, "There is no example with that number for this group. See /examples.")
         return
-    await app.similar.forget(int(row["id"]))
+    await app.similar.forget(int(row["id"]), m.from_user.id if m.from_user else None)
     await reply_temp(m, app, f"Forgot example #{row['id']}. It no longer counts. /examples shows what is left.")
 
 
@@ -629,7 +629,7 @@ async def cmd_disallow(m: Message, app: App, command: CommandObject) -> None:
     if not target or not target.user_id:
         await reply(m, "Reply to the user or give @username / id.")
         return
-    ok = await app.store.disallow_user(cid(m, app), target.user_id)
+    ok = await app.store.disallow_user(cid(m, app), target.user_id, m.from_user.id if m.from_user else None)
     await reply(m, f"<b>{who(target)} is no longer trusted.</b> My filters apply to them again." if ok else "They were not on the trusted list.")
 
 
@@ -717,7 +717,7 @@ async def rule_cmd(m: Message, app: App, command: CommandObject, chat_id: int) -
         if not rest.strip().isdigit():
             await reply(m, "How to use: /rule del &lt;number&gt; (numbers are in /rule list)")
             return
-        ok = await app.store.delete_rule(chat_id, int(rest.strip()))
+        ok = await app.store.delete_rule(chat_id, int(rest.strip()), m.from_user.id if m.from_user else None)
         await reply(m, "<b>Rule removed.</b>" if ok else "There is no rule with that number here. See /rule list.")
         return
     if sub == "add":
@@ -958,7 +958,7 @@ async def cmd_unset(m: Message, app: App, command: CommandObject) -> None:
             await reply(m, html.escape(problem))
             return
     old = (await app.settings.get(cid(m, app))).raw(key)
-    await app.settings.reset(cid(m, app), key)
+    await app.settings.reset(cid(m, app), key, m.from_user.id if m.from_user else None)
     if key in CONTACT_KEYS:
         await report_change(app, cid(m, app), key, old, SPECS[key].default, m.from_user)
     await reply(m, f"<b>Reset.</b> {SPECS[toks[0].lower()].label} is back to the default: {SPECS[toks[0].lower()].default}")
@@ -994,6 +994,8 @@ async def cmd_pause(m: Message, app: App, command: CommandObject) -> None:
         await reply(m, "Give a time, e.g. /pause 30m. To stop for good use /mode shadow.")
         return
     app.paused_until[cid(m, app)] = utcnow() + timedelta(seconds=d.seconds or 0)
+    from . import ledger
+    await ledger.note(app, "pause", cid(m, app), actor=m.from_user, duration=long_duration(str(d)))
     await reply(m, f"<b>Paused for {long_duration(str(d))}.</b> I will not filter anything until then. End early with /resume.")
 
 
@@ -1001,7 +1003,10 @@ async def cmd_pause(m: Message, app: App, command: CommandObject) -> None:
 async def cmd_resume(m: Message, app: App) -> None:
     if not await require_admin(m, app):
         return
-    app.paused_until.pop(cid(m, app), None)
+    was_paused = app.paused_until.pop(cid(m, app), None)
+    if was_paused:
+        from . import ledger
+        await ledger.note(app, "resume", cid(m, app), actor=m.from_user)
     await reply(m, "<b>Resumed.</b> Filtering is back on.")
 
 

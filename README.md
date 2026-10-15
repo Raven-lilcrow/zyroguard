@@ -183,6 +183,7 @@ in `.env`. Everything else is a per-group setting stored in the database and cha
 | `SIMILARITY` | `true` | Load the meaning model. `false` saves about 600 MB of memory but also turns off the meaning match and ZyroMod. |
 | `CONTACT_EMAIL` | empty | Shown with the "Contact the admin" button. |
 | `CONTACT_WEBHOOK_URL`, `CONTACT_WEBHOOK_SECRET` | empty | Optional webhook that also emails contact messages (see [n8n](#n8n-workflows-optional)). |
+| `OWNER_LEDGER_URL`, `OWNER_LEDGER_SECRET` | empty | Optional private activity record: every group added or refused, access change, admin action and setting change (with old and new value), plus a daily summary, sent as Google Sheets API calls to a webhook such as an n8n workflow. Events are kept in the database and retried until the webhook takes them. |
 | `N8N_EVENT_URL`, `N8N_EVENT_SECRET` | empty | Optional webhook that receives a copy of every action. The secret also unlocks `/stats`. |
 | `LOG_LEVEL` | `INFO` | Log level. |
 | `DB_PATH` | `/data/zyroguard.db` | The SQLite database. |
@@ -366,6 +367,7 @@ reply, an `@username` or a numeric id. Tagging the bot first (`@yourbot /ban`) w
 |---|---|
 | Members | `/ask <question>`, `/clear`, `/report` (as a reply), `/help`, `/id`, `/contact` (private chat) |
 | Moderation | `/ban [time]`, `/mute [time]`, `/kick`, `/warn`, `/unban`, `/unmute`, `/strikes`, `/pardon` |
+| Team | `/showadmin`, `/addadmin`, `/removeadmin`, `/addmod`, `/removemod` (see below) |
 | Lists | `/allow`, `/disallow`, `/allowed`, `/allowdomain`, `/blockdomain`, `/rule add <regex> [action] [time]`, `/rule del <id>`, `/rule list` |
 | History | `/log [n]`, `/why <number>`, `/undo <number>`, `/stats [time]` |
 | Teaching | `/spam`, `/notspam`, `/examples`, `/forget <number>` |
@@ -387,7 +389,11 @@ reports.
   reports there and shares one daily AI cap across their groups. When access ends, the bot
   leaves their groups.
 - **Group admins** of a guarded group automatically get the admin commands for it.
-- **Trusted members** (`/allow`) are skipped by the filters but get no commands.
+- **Bot admins** (`/addadmin`) get the admin commands for one group without being a Telegram
+  admin there. Only the user who added the bot, the group's creator, or admins who can add new
+  admins can add or remove them, and every change is posted to the group's reports.
+- **Trusted members** (`/allow` or `/addmod`) are skipped by the filters but get no commands.
+  `/showadmin` lists everyone with power in a group.
 - **Contact the admin.** Anyone can tap the button or send `/contact` in a private chat to message
   you, and `CONTACT_WEBHOOK_URL` can email a copy.
 
@@ -468,7 +474,7 @@ python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
 .venv/Scripts/python -m pytest
 ```
 
-There are 445 tests, all against a fake Telegram, with no network access. Two end-to-end checks
+There are 476 tests, all against a fake Telegram, with no network access. Two end-to-end checks
 drive the real dispatcher through a whole setup:
 
 - [`tools/e2e_newgroup.py`](tools/e2e_newgroup.py) walks a brand-new group through being added,

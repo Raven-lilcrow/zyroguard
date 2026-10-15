@@ -8,7 +8,7 @@ import logging
 import time
 from collections import deque
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +22,7 @@ from .config import Config
 from .judge import Judge
 from .rules import Context, RuleSet, compile_custom, load_rules
 from .settings import ChatSettings, SettingsService, protected_names
-from .store import Store, utcnow
+from .store import Store, from_iso, utcnow
 
 log = logging.getLogger("zyroguard.app")
 
@@ -191,6 +191,7 @@ class App:
     # multi-tenant: groups the bot serves (owner's static list + permit holders' registered groups)
     allowed_chats: set[int] = field(default_factory=set)
     dm_context: dict[int, int] = field(default_factory=dict)   # user_id -> chat_id chosen with /use
+    access_ends: dict[int, datetime] = field(default_factory=dict)   # user's group -> when their access ends
 
     async def load_allowed(self) -> None:
         """Static list plus every group the bot accepted earlier (owner-added or permit-added).
@@ -198,9 +199,29 @@ class App:
         self.allowed_chats = set(self.config.allowed_chat_ids)
         for c in await self.store.list_chats():
             self.allowed_chats.add(int(c["chat_id"]))
+        await self.refresh_access()
+
+    async def refresh_access(self) -> None:
+        """When each user's group stops being served: their access end date, or now when it was revoked."""
+        ends: dict[int, datetime] = {}
+        for c in await self.store.list_chats():
+            owner = c["owner_user_id"]
+            if not owner or self.config.is_owner(int(owner)):
+                continue
+            p = await self.store.get_permit(int(owner))
+            if not p or not p["active"]:
+                ends[int(c["chat_id"])] = datetime.min.replace(tzinfo=timezone.utc)
+            elif p["expires_at"]:
+                ends[int(c["chat_id"])] = from_iso(p["expires_at"]) or datetime.min.replace(tzinfo=timezone.utc)
+        self.access_ends = ends
 
     def chat_allowed(self, chat_id: int) -> bool:
-        return self.config.multi_group or chat_id in self.allowed_chats
+        """Only groups the bot accepted, and only while their user's access lasts. (An empty
+        ALLOWED_CHAT_IDS no longer opens the bot to every group.)"""
+        if chat_id not in self.allowed_chats:
+            return False
+        ends = self.access_ends.get(chat_id)
+        return ends is None or ends > utcnow()
 
     async def controls(self, user_id: int, chat_id: int) -> bool:
         """May this person run admin commands for that group (from anywhere)?"""

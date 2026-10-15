@@ -269,12 +269,24 @@ By default everyone gets the captcha on every join, even after leaving and comin
 | Role | How it is decided | What they can do |
 |---|---|---|
 | Member | anyone else | `/ask`, `/clear`, `/help`, `/id`, `/report`; admin commands are ignored |
-| Trusted member | an admin ran `/allow` on them | exempt from every filter in that group, no commands |
+| Trusted member | an admin ran `/allow` or `/addmod` on them | exempt from every filter in that group, no commands |
+| Bot admin | added with `/addadmin` (see "Your team" below) | all admin commands for that group, exempt from filters, even without being a Telegram admin |
 | Group admin | live Telegram admin of that group, cached 5 min | all admin commands for that group, exempt from filters |
-| User | got access and added the bot to their own group | full control of that group, from their private chat with the bot (section 15) |
+| User | got access and added the bot to their own group | full control of that group, from their private chat with the bot (section 15), including who gets the admin commands |
 
 A demoted admin loses control within five minutes. Anonymous admins (posting as the group)
 are accepted.
+
+**Your team.** Each group manages who helps run it:
+
+| Command | Who can use it | What it does |
+|---|---|---|
+| `/showadmin` | any admin of the group | who has power there: the user who added the bot, group admins, bot admins, trusted members |
+| `/addadmin @user`, `/removeadmin @user` | the user who added the bot, the group's creator, or admins who can add new admins | give or take away the admin commands for someone, for that group only |
+| `/addmod @user`, `/removemod @user` | any admin of the group | the same as `/allow` and `/disallow` |
+
+Bot admins can't add more bot admins, and every change is posted to the group's reports. All of
+these also work from the private chat with the bot, or as a reply to the person's message.
 
 Any command also works with the bot tagged in front of it: `@zyroguard_bot /spam` (as a reply)
 does exactly what `/spam` does. Telegram only counts a command at the very start of a message,
@@ -558,6 +570,7 @@ These live in `/opt/zyroguard/.env` on the server and need a container restart t
 | `CAS_ENABLED` | Server-wide switch for CAS lookups. |
 | `SIMILARITY` | Server-wide switch for the meaning match, `on` by default. Set `off` to skip loading the model (saves about 300 MB of memory). |
 | `N8N_EVENT_URL`, `N8N_EVENT_SECRET` | Where to mirror events, and the header secret both sides check. Without the secret the internal `/stats` endpoint is off. |
+| `OWNER_LEDGER_URL`, `OWNER_LEDGER_SECRET` | Optional private activity record (groups added or refused, access changes, admin actions and setting changes with old and new values, a daily summary per group, a month-end snapshot), sent as Google Sheets API calls to a webhook such as an n8n workflow. Members' message text is never included. Events wait in the database until the webhook takes them. |
 
 Restart after editing:
 

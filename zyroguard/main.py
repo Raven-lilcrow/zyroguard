@@ -13,7 +13,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ChatMemberStatus, ChatType
 from aiogram.types import ChatMemberUpdated, ErrorEvent, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from . import assistant, captcha, commands, contact, diag, forwards, help as help_mod, http, kb, menu, owner, pipeline, scheduler, similar, support
+from . import assistant, captcha, commands, contact, diag, forwards, help as help_mod, http, kb, ledger, menu, owner, pipeline, scheduler, similar, support
 from .actions import Enforcer
 from .app import AdminCache, App
 from .config import VERSION, load_config
@@ -24,6 +24,35 @@ from .store import Store
 
 log = logging.getLogger("zyroguard")
 membership = Router(name="membership")
+
+
+_RIGHTS = {"can_delete_messages": "Delete messages", "can_restrict_members": "Ban users",
+           "can_invite_users": "Invite users"}
+
+
+def _missing_rights(member) -> list[str]:
+    """Rights ZyroGuard needs and does not have; everything when it is not an admin."""
+    status = getattr(member, "status", None)
+    if status == ChatMemberStatus.CREATOR:
+        return []
+    if status != ChatMemberStatus.ADMINISTRATOR:
+        return list(_RIGHTS.values())
+    return [label for attr, label in _RIGHTS.items() if not getattr(member, attr, False)]
+
+
+def _status(status) -> str:
+    return str(getattr(status, "value", status) or "")
+
+
+def _refusal(why: str) -> str:
+    """store.permit_valid's reason in words for the owner's record."""
+    if why == "no permit":
+        return "No access"
+    if why == "permit expired":
+        return "Access expired"
+    if why.startswith("already using"):
+        return "Group limit reached (" + why.removeprefix("already using ").replace(" allowed groups", "") + ")"
+    return why
 
 
 async def _leave(app: App, chat, why: str) -> None:
@@ -71,8 +100,12 @@ async def _welcome_owner(app: App, owner_id: int, chat, rights_ok: bool) -> None
 async def on_my_chat_member(event: ChatMemberUpdated, app: App) -> None:
     chat = event.chat
     new = event.new_chat_member.status
+    old = event.old_chat_member.status
     if chat.type == ChatType.CHANNEL:
         if new not in {ChatMemberStatus.LEFT, ChatMemberStatus.KICKED}:
+            if old in {ChatMemberStatus.LEFT, ChatMemberStatus.KICKED}:
+                await ledger.note(app, "bot_refused", chat.id, actor=event.from_user, title=chat.title,
+                                  reason="A channel (ZyroGuard only guards groups)")
             try:
                 await app.bot.leave_chat(chat.id)   # I guard groups, not channels
             except Exception:  # noqa: BLE001
@@ -81,6 +114,10 @@ async def on_my_chat_member(event: ChatMemberUpdated, app: App) -> None:
     if chat.type not in {ChatType.GROUP, ChatType.SUPERGROUP}:
         return
     if new in {ChatMemberStatus.LEFT, ChatMemberStatus.KICKED}:
+        known_row = await app.store.get_chat(chat.id)
+        if known_row and known_row["active"] and not (event.from_user and event.from_user.id == app.bot_id):
+            await ledger.note(app, "bot_removed", chat.id, actor=event.from_user, title=chat.title,
+                              old_status=_status(old), new_status=_status(new))
         await app.store.deactivate_chat(chat.id)
         app.allowed_chats.discard(chat.id)
         app.dm_context = {u: g for u, g in app.dm_context.items() if g != chat.id}
@@ -94,6 +131,7 @@ async def on_my_chat_member(event: ChatMemberUpdated, app: App) -> None:
     if chat.id in app.allowed_chats:
         owner_id = registered_owner          # already ours: a rights change, not a new add
         if owner_id is not None and not (await app.store.permit_valid_for_existing(owner_id)):
+            await ledger.note(app, "bot_left", chat.id, target=owner_id, title=chat.title)
             await _leave(app, chat, "owner's permit ended")
             return
     elif adder and app.config.is_owner(adder.id):
@@ -101,6 +139,7 @@ async def on_my_chat_member(event: ChatMemberUpdated, app: App) -> None:
     elif adder:
         ok, why = await app.store.permit_valid(adder.id)
         if not ok:
+            await ledger.note(app, "bot_refused", chat.id, actor=adder, title=chat.title, reason=_refusal(why))
             await _leave(app, chat, f"{adder.id}: {why}")
             return
         # a permit holder may only register groups they actually run
@@ -111,18 +150,44 @@ async def on_my_chat_member(event: ChatMemberUpdated, app: App) -> None:
                                                      "of a group to add me to it.")
             except Exception:  # noqa: BLE001
                 pass
+            await ledger.note(app, "bot_refused", chat.id, actor=adder, title=chat.title,
+                              reason="Has access but is not an admin of this group")
             await _leave(app, chat, f"{adder.id}: not an admin of the group")
             return
         owner_id = adder.id
     else:
+        await ledger.note(app, "bot_refused", chat.id, title=chat.title, reason="Added by an unknown person")
         await _leave(app, chat, "unknown adder")
         return
 
+    was_ours = chat.id in app.allowed_chats
     is_new = await app.store.upsert_chat(chat.id, chat.title)
     log.info("in %s (%s) as %s, added by %s, customer %s", chat.title, chat.id, new, adder.id if adder else None, owner_id)
     if owner_id is not None or adder and app.config.is_owner(adder.id):
         await app.store.set_chat_owner(chat.id, owner_id)
+    missing = _missing_rights(event.new_chat_member)
+    if old in {ChatMemberStatus.LEFT, ChatMemberStatus.KICKED}:
+        _, adder_name = ledger._person(adder)
+        await app.store.set_chat_added_by(chat.id, adder.id if adder else None, adder_name)
+        if owner_id is not None:
+            p = await app.store.get_permit(owner_id)
+            used = len(await app.store.chats_owned_by(owner_id))
+            how = f"User access ({used} of {p['max_groups'] if p else '?'} groups)"
+        elif chat.id in app.config.allowed_chat_ids:
+            how = "Allowlist"
+        else:
+            how = "You"
+        await ledger.note(app, "bot_added", chat.id, actor=adder, title=chat.title, how=how,
+                          rights_ok=not missing, missing=missing, old_status=_status(old), new_status=_status(new),
+                          mode=(await app.settings.get(chat.id)).raw("mode"))
+    elif was_ours:
+        old_missing = _missing_rights(event.old_chat_member)
+        if set(missing) != set(old_missing):
+            await ledger.note(app, "bot_rights", chat.id, actor=adder, title=chat.title,
+                              lost=bool(set(missing) - set(old_missing)), rights_ok=not missing, missing=missing,
+                              old_status=_status(old), new_status=_status(new))
     app.allowed_chats.add(chat.id)
+    await app.refresh_access()
     app.admins.invalidate(chat.id)
     rights = await app.admins.bot_rights(chat.id, force=True) if new == ChatMemberStatus.ADMINISTRATOR else None
     rights_ok = bool(rights and rights.ok)
@@ -250,6 +315,7 @@ async def run() -> None:
         except Exception as e:  # noqa: BLE001
             log.warning("cannot read allowed chat %s: %s", chat_id, e)
     await app.load_allowed()
+    await ledger.start(app)
 
     await menu.register(bot, config.owner_ids, sorted(app.allowed_chats))
 
@@ -275,6 +341,7 @@ async def run() -> None:
         await asyncio.gather(sched, *background, return_exceptions=True)
         await runner.cleanup()
         await enforcer.close()
+        await ledger.close()
         await store.close()
         await bot.session.close()
 

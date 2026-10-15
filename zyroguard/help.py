@@ -124,6 +124,12 @@ Reply to someone's message with the command, or add their @username.
 /stats 7d – what I caught lately
 /diag – health check, with a fix for anything that is off
 
+<b>Your team</b>
+/showadmin – who has power in this group
+/addadmin @user – let someone use these commands here, even if they are not a Telegram admin
+/removeadmin @user – take it back
+Adding and removing them: the person who added me, the group's creator, or admins who can add new admins.
+
 Members can reply /report to a message to flag it for you.
 All of these work in our private chat too, so members never see you set me up.""",
     "start": """<b>Getting started</b>
@@ -144,7 +150,7 @@ Commands sent here apply to the group you are working on.
 /log – my last actions there, with undo numbers.
 
 My reports about that group also arrive here, unless you set a log group with /set modlog_chat_id.
-Things that need a message to reply to (like /ban as a reply), /report, and the owner's /addadmin, /addmod and /showadmin still happen in the group.""",
+Things that need a message to reply to (like /ban as a reply) and /report still happen in the group.""",
     "punish": """<b>Punishing someone</b>
 Reply to their message with the command, or write the command and their @username.
 
@@ -163,7 +169,13 @@ Reply to their message with the command, or write the command and their @usernam
 /allowdomain example.com – links to that site are always fine.
 /blockdomain example.com – links to that site are always removed.
 
-Group admins are never checked. The bot owner can also add helpers with /addadmin and /addmod.""",
+Group admins are never checked.
+/addmod @user – the same as /allow. /removemod @user – the same as /disallow.
+
+<b>Your team</b>
+/addadmin @user – let someone use my admin commands here, even if they are not a Telegram admin. /removeadmin @user takes it back.
+Only the person who added me, the group's creator, or admins who can add new admins can add or remove them.
+/showadmin – who has power in this group.""",
     "rules": """<b>Your own spam patterns</b>
 /rule add &lt;words or pattern&gt; [what to do]
 Examples:
@@ -388,11 +400,15 @@ COMMANDS: dict[str, tuple[str, str, str]] = {
     "log": ("My last actions with their numbers.", "/log [how many]", "/log 20"),
     "stats": ("How much I caught in a period.", "/stats [period]", "/stats 7d"),
     "id": ("Shows this chat's id, your id, and the id of a user you replied to.", "/id", "/id"),
-    "addadmin": ("Owner only. Lets a user run my admin commands in this group. My filters skip them too.", "/addadmin @user", "/addadmin @helper"),
-    "removeadmin": ("Owner only. Takes /addadmin back.", "/removeadmin @user", "/removeadmin @helper"),
-    "addmod": ("Owner only. My filters skip this user, but they get no commands.", "/addmod @user", "/addmod @helper"),
-    "removemod": ("Owner only. Takes /addmod back.", "/removemod @user", "/removemod @helper"),
-    "showadmin": ("Owner only. Lists owners, group admins, bot admins and mods for this group.", "/showadmin", "/showadmin"),
+    "addadmin": ("Lets someone use my admin commands in this group, even if they are not a Telegram admin. My filters "
+                 "skip them too. Only the person who added me, the group's creator, or admins who can add new admins "
+                 "can use it.", "/addadmin @user, or reply to them with /addadmin", "/addadmin @helper"),
+    "removeadmin": ("Takes /addadmin back. Same people as /addadmin.", "/removeadmin @user", "/removeadmin @helper"),
+    "addmod": ("Makes someone trusted here: my filters skip them, but they get no commands. The same as /allow.",
+               "/addmod @user", "/addmod @helper"),
+    "removemod": ("Takes /addmod back. The same as /disallow.", "/removemod @user", "/removemod @helper"),
+    "showadmin": ("Shows who has power in this group: the person who added me, group admins, bot admins and "
+                  "trusted users.", "/showadmin", "/showadmin"),
     "groups": ("Owner only. Every group I am in.", "/groups", "/groups"),
     "usage": ("Owner only. AI judge usage per group.", "/usage [period]", "/usage 7d"),
     "use": ("In our private chat: pick which of your groups the commands apply to.", "/use, or /use <group id>", "/use"),
@@ -400,7 +416,13 @@ COMMANDS: dict[str, tuple[str, str, str]] = {
     "revoke": ("Owner only. Takes a permit back: I leave their groups and delete their records.", "/revoke @user or id", "/revoke @alice"),
     "permits": ("Owner only. Who has a permit and which groups they use.", "/permits", "/permits"),
     "purge": ("Owner only. Deletes all records of a group I already left.", "/purge <group id>", "/purge -1001234"),
+    "history": ("Owner only. What happened lately: groups added or refused, access changes, what admins did and changed. Newest first, Manila time.", "/history [days]", "/history 30"),
+    "ledger": ("Owner only. Is the activity sheet being updated? Add sync to send everything now.", "/ledger [sync]", "/ledger sync"),
 }
+
+
+def owner_only(name: str) -> bool:
+    return name in COMMANDS and COMMANDS[name][0].startswith("Owner only.")
 
 
 def command_help(name: str) -> str:
@@ -435,9 +457,9 @@ async def cmd_help(m: Message, app: App, command: CommandObject) -> None:
         text, markup = OVERVIEW, help_markup(None)
     elif arg in TOPICS:
         text, markup = TOPICS[arg], help_markup(arg)
-    elif arg in COMMANDS:
+    elif arg in COMMANDS and (not owner_only(arg) or (m.from_user and app.config.is_owner(m.from_user.id))):
         text, markup = command_help(arg), None
-    else:
+    else:   # owner commands don't exist for anyone but the bot's owners
         text = (f"I have no help page called '{html.escape(arg)}'.\n"
                 "Send /help on its own for the topic buttons, or /help followed by a command name.")
         markup = None

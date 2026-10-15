@@ -122,11 +122,41 @@ def to_html(text: str) -> str:
     return "".join(out)
 
 
-def build_system_prompt() -> str:
+# Added only when a bot owner asks in a private chat (never in a group, where members would read the answer).
+OWNER_SECTION = """The person asking is a bot owner
+- This is a private chat with one of the people who run ZyroGuard. They can use every admin command in every group, plus the owner commands below. Answer their questions about these fully, with the same command format as above.
+- Owners are set on the server. Adding or removing an owner can't be done from Telegram.
+
+Owner commands
+{owner_guide}
+
+Other things only owners can do
+- Reply `/spam all` to a message to teach it to every group, not just one. `/forget` can also remove those shared examples.
+- Run any admin command in any group I guard, even where they are not a Telegram admin of that group.
+- Add me to a new group: I register it by myself. Their own messages are never checked as spam."""
+
+# owner commands without an entry in help.COMMANDS: (name, what it does, how to use it, example)
+OWNER_EXTRA = [("reloadrules", "Re-reads the spam rules file without a restart. A broken file is reported and the "
+                "old rules stay in use.", "/reloadrules", "/reloadrules")]
+
+
+def owner_guide() -> str:
+    """Every owner command, from help.COMMANDS ("Owner only." entries), so new ones show up by themselves."""
+    from .help import COMMANDS
+    items = [(name, what.removeprefix("Owner only.").strip(), how, example)
+             for name, (what, how, example) in COMMANDS.items() if what.startswith("Owner only.")]
+    items += [extra for extra in OWNER_EXTRA if extra[0] not in COMMANDS]
+    return "\n".join(f"`{how}`: {what} Example: `{example}`" for _name, what, how, example in items)
+
+
+def build_system_prompt(owner: bool = False) -> str:
     from .help import TOPICS
     keys = ["start", "punish", "trust", "rules", "settings", "time", "check", "support"]
     guide = "\n\n".join(_strip_html(TOPICS[k]) for k in keys)
-    return SYSTEM_PROMPT.replace("{guide}", guide)
+    prompt = SYSTEM_PROMPT.replace("{guide}", guide)
+    if owner:
+        prompt += "\n\n" + OWNER_SECTION.replace("{owner_guide}", owner_guide())
+    return prompt
 
 
 class Assistant:
@@ -137,6 +167,7 @@ class Assistant:
         self.effort = effort
         self.max_tokens = max_tokens
         self.system = build_system_prompt()
+        self.owner_system = build_system_prompt(owner=True)
         self._last: dict[tuple[int, int], Any] = {}
         # (chat_id, user_id) -> {"ts": datetime, "msgs": [{"role","content"}, ...]}
         self._history: dict[tuple[int, int], dict[str, Any]] = {}
@@ -221,8 +252,9 @@ class Assistant:
         return text[:MAX_ANSWER_CHARS], None
 
     async def ask(self, chat_id: int, question: str, *, asker: str, user_id: int = 0, context: str | None = None,
-                  daily_cap: int | None = None) -> tuple[str | None, str | None]:
-        """Returns (answer, problem). Exactly one of them is set."""
+                  daily_cap: int | None = None, owner: bool = False) -> tuple[str | None, str | None]:
+        """Returns (answer, problem). Exactly one of them is set.
+        owner = a bot owner asking in a private chat: the guide then includes the owner commands."""
         if not self.client:
             return None, "no_key"
         if await self._cap_reached(chat_id, daily_cap):
@@ -232,7 +264,7 @@ class Assistant:
             parts.insert(0, f"Context, the message they replied to:\n<context>\n{context[:1500]}\n</context>\n")
         user_turn = "\n".join(parts)
         messages = self.history(chat_id, user_id) + [{"role": "user", "content": user_turn}]
-        text, problem = await self._create(chat_id, self.system, messages)
+        text, problem = await self._create(chat_id, self.owner_system if owner else self.system, messages)
         if text:
             self.remember(chat_id, user_id, user_turn, text)
         return text, problem
@@ -415,7 +447,7 @@ async def answer(app: App, m: Message, question: str) -> None:
         cap = None if await _private_role(app, m.from_user.id) == "staff" else PRIVATE_DAILY_CAP
     text, problem = await app.assistant.ask(
         chat_id, question, asker=asker, user_id=m.from_user.id, context=reply_context(app, m),
-        daily_cap=cap,
+        daily_cap=cap, owner=not in_group and app.config.is_owner(m.from_user.id),   # never in a group: members read it
     )
     if problem == "cap":
         await m.reply("I have answered a lot today, the daily limit for questions is reached. Try again tomorrow." + (" Admins can raise it with /set assistant_daily_cap 500." if in_group else ""))

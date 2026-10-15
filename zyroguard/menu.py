@@ -55,6 +55,9 @@ ADMIN = _cmds([
     ("spam", "Teach me spam: reply, or add a /log number"),
     ("notspam", "Teach me a message is fine: reply or number"),
     ("examples", "What I learned from /spam"),
+    ("showadmin", "Who has power in this group"),
+    ("addadmin", "Let someone use my admin commands here"),
+    ("removeadmin", "Take my admin commands back"),
     ("zyromod", "Support mode: answer from your files"),
     ("mode", "shadow (report only) or enforce"),
     ("pause", "Stop filtering for a while"),
@@ -102,6 +105,9 @@ PRIVATE = _cmds([
     ("allowdomain", "Always allow links to a site"),
     ("blockdomain", "Always remove links to a site"),
     ("rule", "Your own spam patterns: add, list, del"),
+    ("showadmin", "Who has power in your group"),
+    ("addadmin", "Let someone use my admin commands"),
+    ("removeadmin", "Take my admin commands back"),
     ("pause", "Stop filtering for a while"),
     ("resume", "Start filtering again"),
     ("set", "Change one setting"),
@@ -114,14 +120,6 @@ PRIVATE = _cmds([
     ("contact", "Message the admin"),
 ])
 
-OWNER_EXTRA = _cmds([
-    ("addadmin", "Owner: let a user run my admin commands"),
-    ("removeadmin", "Owner: remove a bot admin"),
-    ("addmod", "Owner: trust a user, skip all checks"),
-    ("removemod", "Owner: remove a trusted user"),
-    ("showadmin", "Owner: who can control me here"),
-])
-
 OWNER_PRIVATE_EXTRA = _cmds([
     ("groups", "Owner: every group I am in"),
     ("usage", "Owner: AI usage per group"),
@@ -129,6 +127,8 @@ OWNER_PRIVATE_EXTRA = _cmds([
     ("permit", "Owner: let someone add me to their group"),
     ("revoke", "Owner: take a permit back"),
     ("permits", "Owner: who has a permit"),
+    ("history", "Owner: what happened lately"),
+    ("ledger", "Owner: activity sheet status"),
     ("purge", "Owner: delete records of a group I left"),
 ])
 
@@ -144,8 +144,8 @@ async def register(bot: Bot, owner_ids: Iterable[int], group_ids: Iterable[int])
     owners = list(owner_ids)
     for uid in owners:
         plans.append((BotCommandScopeChat(chat_id=uid), PRIVATE + OWNER_PRIVATE_EXTRA))
-        for gid in group_ids:
-            plans.append((BotCommandScopeChatMember(chat_id=gid, user_id=uid), ADMIN + OWNER_EXTRA))
+        for gid in group_ids:   # the admin menu even in groups where the owner is not a Telegram admin
+            plans.append((BotCommandScopeChatMember(chat_id=gid, user_id=uid), ADMIN))
     done = 0
     for scope, cmds in plans:
         try:
