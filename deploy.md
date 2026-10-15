@@ -123,7 +123,7 @@ second copy you can extend (Slack, email, a sheet) without touching the bot.
 | Captcha never restricts | Group is in shadow mode. `/mode enforce`. |
 | Claude failed in `/diag` | Key missing or wrong, or outbound HTTPS blocked. Look at `docker compose logs zyroguard`. |
 | n8n failed in `/diag` | Network name mismatch, or workflow not active. Test with `docker exec zyroguard python -c "import urllib.request;print(urllib.request.urlopen('http://n8n:5678/healthz').status)"`. |
-| Bot left the group | Added from an account that is not in `OWNER_IDS`. Add it from that account, or put the id in `ALLOWED_CHAT_IDS` and `docker compose up -d`. |
+| Bot left the group | Added by someone without access, or by a user who is not an admin there. Add it from the `OWNER_IDS` account, give that person access, or put the id in `ALLOWED_CHAT_IDS` and `docker compose up -d`. |
 
 A cron job on the host runs `/opt/zyroguard/backup.sh` daily at 03:15 (server time). It makes a consistent
 copy with SQLite's backup API into `/opt/zyroguard/backup/zyroguard-<date>.db` and keeps 14 days.

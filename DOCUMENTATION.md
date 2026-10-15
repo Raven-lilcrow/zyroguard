@@ -19,7 +19,7 @@ Start here:
 - [More how-to questions](#more-how-to-questions)
 
 After the guides, sections 1 to 11 and 13 cover ZyroGuard in detail, sections 12 and 12b cover
-ZyroMod, and sections 14 to 16 cover contact, evasion handling and security.
+ZyroMod, and sections 14 to 16 cover contact, using ZyroGuard in your own group, and security.
 To run your own copy of the bot on a server see `deploy.md`; for the code see `README.md`.
 
 ## ZyroGuard features: keeping the group safe
@@ -51,19 +51,21 @@ To run your own copy of the bot on a server see `deploy.md`; for the code see `R
 About 10 minutes, then a few days of watching. You need to be the group's creator, or an admin who
 can add admins.
 
-1. **Start the bot.** Open @zyroguard_bot in Telegram and tap **Start**, so it can send you private
-   messages.
+1. **Get access.** Open @zyroguard_bot, tap **Start**, send `/contact` and say which group it is
+   for. Without access the bot leaves any group it is added to, and you must be an admin of the
+   group you add it to (section 15).
 2. **Add the bot as an admin.** Open your group's info, tap **Administrators** (on some apps
    **Edit**, then **Administrators**), then **Add Admin**, and search for `@zyroguard_bot`. Turn on
    **Delete messages**, **Ban users** and **Invite users via link**, leave the rest off, and save.
    If your app asks you to add it as a member first, add it, then promote it.
 3. **Check the welcome.** In the group the bot says "ZyroGuard is here. All rights look good.
-   Admins: I start in report-only mode." If the bot says it still needs rights, go back to step 2.
-4. **Run the check.** Send `/diag` in the group. Every line should be a check
+   Admins: I start in report-only mode." You also get a private message from the bot with
+   **Run check** and **Open settings** buttons. If the bot says it still needs rights, go back to
+   step 2.
+4. **Run the check.** Send `/diag` in the group, or tap **Run check**. Every line should be a check
    mark. A cross comes with a one-line fix.
-5. **Choose where reports go.** Reports go to the log group set on the server. To give this group
-   its own log group: create a
-   private group, add @zyroguard_bot to it, send `/id` there, then send
+5. **Choose where reports go.** You get every report in your private chat with the bot. To use a
+   separate log group instead: create a private group, add @zyroguard_bot to it, send `/id` there, then send
    `/set modlog_chat_id <that id>` to the bot.
 6. **Tell it about your group (optional, recommended).**
    - `/set judge_context an online shop community, product links and prices are normal`, so the AI
@@ -269,6 +271,7 @@ By default everyone gets the captcha on every join, even after leaving and comin
 | Member | anyone else | `/ask`, `/clear`, `/help`, `/id`, `/report`; admin commands are ignored |
 | Trusted member | an admin ran `/allow` on them | exempt from every filter in that group, no commands |
 | Group admin | live Telegram admin of that group, cached 5 min | all admin commands for that group, exempt from filters |
+| User | got access and added the bot to their own group | full control of that group, from their private chat with the bot (section 15) |
 
 A demoted admin loses control within five minutes. Anonymous admins (posting as the group)
 are accepted.
@@ -329,7 +332,7 @@ numeric id.
 | `/allowed` (or `/approved`) | List exempt users. |
 | `/allowdomain example.com` | Links to this domain are always fine. |
 | `/blockdomain example.com` | Links to this domain are always spam. |
-| `/rule add <regex> [action] [dur]` | Add a custom pattern. `/rule add join my channel ban 7d`. Without an action it uses the strike ladder. Patterns are limited to 200 characters and may not use nested repeats or backreferences, which could stall the bot. |
+| `/rule add <regex> [action] [dur]` | Add a custom pattern. `/rule add join my channel ban 7d`. Without an action it uses the strike ladder. Patterns are limited to 200 characters and may not use nested repeats, two repeats in a row that match the same characters (like `\s*\s*`), or backreferences, which could stall the bot. Custom rules check the first 1,000 characters of a message. A rule that still takes too long is switched off and the mod log says so. |
 | `/rule del <id>` | Remove a custom rule. |
 | `/rule list` | Show custom rules with their ids. |
 
@@ -504,7 +507,7 @@ Every log-group post ends with its action number so `/why` and `/undo` always re
 
 **Reports.** Every action (or would-be action in shadow mode) is posted with the user, the
 reason, the duration and expiry, and Undo / Why buttons. Reports go to the group's log chat
-if one is set, otherwise to the
+if one is set, otherwise to the private chat of the user who added the bot, otherwise to the
 server-wide log group. The bot also posts a daily summary at `digest_time`. If
 `N8N_EVENT_URL` is set, n8n receives a copy of every event on the `zyroguard-event` webhook.
 
@@ -527,7 +530,7 @@ Common fixes:
 | "I am missing the 'Ban users' right" in a report | Give the bot Delete messages, Ban users, Invite users via link. |
 | Captcha shows but nobody is muted | Group is in shadow mode. `/mode enforce`. |
 | Claude line red in `/diag` | Key or base URL wrong in `.env` on the server. |
-| Bot left the group | It was added from an account that is not in `OWNER_IDS`. Add it from that account, or put the group id in `ALLOWED_CHAT_IDS` and restart. |
+| Bot left the group | It was added by someone without access, or by a user who is not an admin of that group. Get access first (section 15), then add it again as a group admin. |
 
 ---
 
@@ -548,7 +551,7 @@ These live in `/opt/zyroguard/.env` on the server and need a container restart t
 | `ANTHROPIC_API_KEY` | Claude key, or the key for your API gateway. Secret. |
 | `ANTHROPIC_BASE_URL` | Your gateway's URL, to route through an Anthropic-compatible gateway. Empty for Anthropic direct. |
 | `JUDGE_MODEL`, `JUDGE_EFFORT` | `claude-opus-5`, `high`. |
-| `OWNER_IDS` | Your Telegram user id. The bot guards the groups you add it to from this account. |
+| `OWNER_IDS` | The Telegram user id of the bot owner, the one person who runs the bot. |
 | `ALLOWED_CHAT_IDS` | Groups the bot serves from the start. Groups you add later are remembered in the database. Anyone else adding the bot makes it leave. |
 | `MODLOG_CHAT_ID` | Default mod-log chat for groups that have not set their own. |
 | `MODE` | Default mode for new groups, `shadow`. |
@@ -725,8 +728,8 @@ cooldown. A big file takes a few minutes to read; the bot keeps checking spam me
 
 | What | Who |
 |---|---|
-| Files, on/off, `/ask` reminders, test, unanswered list | Any admin of the group |
-| Support email, contact button link and text, can't-answer message, instructions | Only the group's creator and admins who may add new admins |
+| Files, on/off, `/ask` reminders, test, unanswered list | Any admin of the group, and the user who added the bot |
+| Support email, contact button link and text, can't-answer message, instructions | Only the user who added the bot, the group's creator and admins who may add new admins |
 
 Every contact change (from `/zyromod` or `/set`) is posted to the group's reports with the old and
 new value and who changed it. A contact link on the group's blocked-domain list, or a link
@@ -786,7 +789,7 @@ Anyone who meets the bot can reach the admin. A "✉️ Contact the admin" butto
 
 Flow: tap the button, the bot asks for the message, the person writes it in one go. The bot then:
 
-1. sends it to you on Telegram right away (the account in `OWNER_IDS`), with a link to reply, and
+1. sends it on Telegram right away to the account in `OWNER_IDS`, with a link to reply, and
 2. emails it to `CONTACT_EMAIL` through n8n, if `CONTACT_WEBHOOK_URL` is set.
 
 Limits: one message per person per 10 minutes, 2000 characters, `/cancel` to stop. Nothing about the person is stored.
@@ -803,7 +806,40 @@ n8n side: import `n8n/ZyroGuard-Contact.json`, set the secret in the "Secret ok?
 
 ---
 
-## 15. Evasion handling
+## 15. Using ZyroGuard in your own group
+
+A user is the person who adds ZyroGuard to their group. Each user's groups are fully separate
+from everyone else's.
+
+**Getting access.** Open @zyroguard_bot, tap **Start**, send `/contact` and say which group it is
+for. Once you have access, add the bot to that group as an admin. You must be an admin of the group
+yourself. Without access the bot leaves the group and shows the "Contact the admin" button. When
+the bot joins, you get a private message from it with **Run check** and **Open settings** buttons.
+
+**Managing from the private chat.** Every admin command works in your private chat with the bot:
+`/settings`, `/diag`, `/mode`, `/log`, `/stats`, `/rule`, `/set`, and the rest. With one group it
+is picked automatically. With more, `/use` shows buttons to choose which group the commands apply
+to. Commands that need a reply (like `/ban` as a reply) still happen in the group. Telegram admins
+of your group can use the commands inside the group as usual.
+
+**Reports.** Actions in your group are reported to your private chat with the bot, with the same
+undo numbers. You can point them at a log group instead with `/set modlog_chat_id`. Reports from
+your group never go to anyone else's log.
+
+**Separation.** Every table is keyed by group id: settings, strikes, trusted users, domains,
+custom rules, audit rows, captcha state, AI usage. You can only control groups registered to you
+or where you are a Telegram admin. `/why`, `/undo` and the settings buttons check the same rule.
+
+**AI budget.** Each user has a daily cap on AI calls (spam judge, safety check and questions
+together) across all of their groups, 1500 by default. Past the cap the rules still work, only the
+AI parts pause until the next day.
+
+**When access ends.** The bot leaves your groups and tells you in your private chat. Send
+`/contact` to renew.
+
+---
+
+## 15b. Evasion handling
 
 Text is folded before matching: NFKC normalisation, zero-width and direction-control characters
 removed, Cyrillic/Greek lookalikes and small-caps letters mapped to Latin, and spaced-out
@@ -819,9 +855,9 @@ extracted. Edits that add a link are scored higher. Forwards from newcomers are 
   and the bot is present.
 - Custom rule patterns are checked for length and for regex shapes that can hang the matcher.
 - Error rows never contain the bot token: download errors are redacted before they are stored.
-- The bot leaves channels.
-- Private-chat questions are capped at 30 per person per day for members. Group admins have
-  no cap. Only people who have taken part in a guarded group
+- A user can only register groups where they are an admin. The bot leaves channels.
+- Private-chat questions are capped at 30 per person per day for members. Group admins and users
+  have no cap. Only people who have taken part in a guarded group
   can chat with the bot privately; `/test` in private needs a group you control.
 - Edited messages go through the spam rules and the safety check again.
 - Posts made "as a channel" that hit a hard rule are deleted and the channel is banned from

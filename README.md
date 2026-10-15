@@ -156,8 +156,8 @@ Add the bot to the group as an admin with three rights: **Delete messages**, **B
 **Invite users via link**. Leave the rest off. The bot posts a welcome; then send `/diag` in the
 group, and every line should show a check mark. A failed line comes with a one-line fix.
 
-The bot only stays in groups added from that account or listed in `ALLOWED_CHAT_IDS`. It leaves
-any other group. The `/` command menus are registered by
+The bot only stays in groups added from that account, groups added by a user with access who is
+an admin there, and groups listed in `ALLOWED_CHAT_IDS`. It leaves any other group. The `/` command menus are registered by
 the bot itself, so there is nothing to set up for them in @BotFather.
 
 ## Configuration
@@ -170,7 +170,7 @@ in `.env`. Everything else is a per-group setting stored in the database and cha
 | Variable | Default | What it does |
 |---|---|---|
 | `BOT_TOKEN` | required | The token from @BotFather. |
-| `OWNER_IDS` | empty | Your Telegram user id. The bot guards the groups you add it to from this account. |
+| `OWNER_IDS` | empty | Your Telegram user id, as the bot owner. One person. |
 | `ANTHROPIC_API_KEY` | empty | Claude API key. Empty runs without the AI judge, safety check and question answering. |
 | `ANTHROPIC_BASE_URL` | empty | An Anthropic-compatible gateway. Empty uses api.anthropic.com. |
 | `JUDGE_MODEL` | `claude-opus-5` | Model for the judge, the safety check and answers. |
@@ -243,7 +243,7 @@ a message hits and what the bot would do.
   online shop community, product links and prices are normal". With `judge_examples` on, the judge
   also sees up to three of the closest messages this group has taught it.
 - **Limits.** At most `judge_daily_cap` checks per group per day (500), `safety_daily_cap` safety
-  checks (300).
+  checks (300), and a shared daily cap across all of a user's groups (1,500).
 - **Cost.** The system prompt is cached. In the 52,000-member group, 20 checks in 23 days cost
   about nine cents.
 - **Failures.** If Claude can't be reached, nothing is removed.
@@ -307,8 +307,8 @@ trigger `warn_action` (a one-day mute).
 
 ### Reports, notices and summaries
 
-Reports go to the group's `modlog_chat_id` if one is set, otherwise to `MODLOG_CHAT_ID`. Each
-report says who, what and why, with **Why**, **Undo** and **Teach as spam** buttons. In enforce mode
+Reports go to the group's `modlog_chat_id` if one is set, otherwise to the private chat of the
+user who added the bot, otherwise to `MODLOG_CHAT_ID`. Each report says who, what and why, with **Why**, **Undo** and **Teach as spam** buttons. In enforce mode
 the group also sees a short notice that deletes itself after `notice_ttl`. Every group gets a daily
 summary at `digest_time`, in Asia/Manila time (set in `zyroguard/scheduler.py`). `/log`,
 `/why <number>` and `/stats` show the same history on demand.
@@ -348,8 +348,8 @@ of files (up to about 16,000 characters) is sent whole with every question so no
 missed; larger ones are searched with the same meaning model as the spam check. Any link in an
 answer that isn't in the files or the contacts is removed before sending. An answered question
 costs about 2 cents. Unless the group has given the bot instructions, a question with nothing
-related in the files gets the can't-answer message without calling the AI at all. Only the group's creator and
-admins who can add new admins may change where members are sent for help, and every change is reported.
+related in the files gets the can't-answer message without calling the AI at all. Only the user who added the bot, the
+group's creator and admins who can add new admins may change where members are sent for help, and every change is reported.
 
 The full guide, including the weekly **Unanswered** list, is in
 [DOCUMENTATION.md](DOCUMENTATION.md#how-do-i-set-up-zyromod-in-my-telegram-group).
@@ -380,6 +380,10 @@ reports.
 
 - **Groups you add** from the account in `OWNER_IDS` are guarded and remembered.
 - **`ALLOWED_CHAT_IDS`** lists groups the bot always serves, whoever adds it.
+- **Users** are the people who add the bot to their own group after getting access from you. A
+  user must be an admin of that group, controls it from their private chat with the bot, gets its
+  reports there and shares one daily AI cap across their groups. When access ends, the bot
+  leaves their groups.
 - **Group admins** of a guarded group automatically get the admin commands for it.
 - **Trusted members** (`/allow`) are skipped by the filters but get no commands.
 - **Contact the admin.** Anyone can tap the button or send `/contact` in a private chat to message
