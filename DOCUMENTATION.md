@@ -854,6 +854,9 @@ extracted. Edits that add a link are scored higher. Forwards from newcomers are 
 - `/set modlog_chat_id` only accepts your own private chat or a chat where you are an admin
   and the bot is present.
 - Custom rule patterns are checked for length and for regex shapes that can hang the matcher.
+  Each custom rule also gets 50 ms per message (200 ms for all of a group's rules together) and
+  only sees the first 1,000 characters. A rule that runs out of time is switched off and the
+  mod log says so.
 - Error rows never contain the bot token: download errors are redacted before they are stored.
 - A user can only register groups where they are an admin. The bot leaves channels.
 - Private-chat questions are capped at 30 per person per day for members. Group admins and users

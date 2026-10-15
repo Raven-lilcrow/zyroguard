@@ -228,8 +228,10 @@ change without a rebuild: edit the file on the server, then `docker compose rest
 holds the score thresholds (`judge: 4`, `hard: 10`), the few rules that act alone, the scored rules
 with their weights, impersonation patterns, names protected in every group, join and bio patterns,
 domains that are always allowed, and the words that trigger the safety check. Each group can add
-its own patterns with `/rule add <regex> [action] [time]`. `/test <text>` shows exactly which rules
-a message hits and what the bot would do.
+its own patterns with `/rule add <regex> [action] [time]`. Patterns that could stall the bot are
+refused, each rule gets 50 ms per message, and a rule that runs out of time is switched off with a
+note in the mod log. `/test <text>` shows exactly which rules a message hits and what the bot would
+do.
 
 ### The AI judge
 
@@ -466,7 +468,7 @@ python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
 .venv/Scripts/python -m pytest
 ```
 
-There are 443 tests, all against a fake Telegram, with no network access. Two end-to-end checks
+There are 445 tests, all against a fake Telegram, with no network access. Two end-to-end checks
 drive the real dispatcher through a whole setup:
 
 - [`tools/e2e_newgroup.py`](tools/e2e_newgroup.py) walks a brand-new group through being added,
