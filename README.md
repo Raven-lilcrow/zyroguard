@@ -474,16 +474,12 @@ python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
 .venv/Scripts/python -m pytest
 ```
 
-There are 476 tests, all against a fake Telegram, with no network access. Two end-to-end checks
-drive the real dispatcher through a whole setup:
+There are 476 tests, all against a fake Telegram, with no network access. An end-to-end check,
+[`tools/e2e_newgroup.py`](tools/e2e_newgroup.py), drives the real dispatcher through a whole setup:
+a brand-new group being added, the captcha, five moderation cases, ZyroMod setup and every way of
+asking.
 
-- [`tools/e2e_newgroup.py`](tools/e2e_newgroup.py) walks a brand-new group through being added,
-  the captcha, five moderation cases, ZyroMod setup and every way of asking.
-- [`tools/e2e_full_setup.py`](tools/e2e_full_setup.py) sets a group up the way a client would, with
-  the test files in [`client-kit/test-group`](client-kit/test-group), and presses the Why, Undo and
-  Teach as spam buttons on real reports.
-
-Both run locally with fake AI, or on a server in a throwaway copy of the image with the real model
+It runs locally with fake AI, or on a server in a throwaway copy of the image with the real model
 and Claude. On Windows, set `PYTHONIOENCODING=utf-8`.
 
 ```bash
