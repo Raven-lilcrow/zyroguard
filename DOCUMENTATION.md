@@ -146,14 +146,10 @@ question**, **Unanswered**, **Turn off**, **/ask reminders**, **Remove all files
 
 ## 1. How it works
 
-```
-Telegram  <-- long polling -->  ZyroGuard (Python)
-                                   |  rules        instant, free
-                                   |  Claude judge only for gray-zone messages
-                                   |  actions      delete, mute, ban, kick
-                                   |  SQLite       strikes, settings, audit log
-                                   +--> mod-log group and n8n
-```
+ZyroGuard is a Python bot that talks to Telegram by long polling. Rules settle most messages
+instantly and for free, Claude judges only the gray-zone ones, and the actions are delete, mute,
+ban and kick. Strikes, settings and the audit log live in SQLite, and every action is reported to
+the mod-log group (and to n8n, if you use it).
 
 For every message from a non-admin, the bot runs these checks in order. The first hit wins.
 
@@ -166,7 +162,7 @@ For every message from a non-admin, the bot runs these checks in order. The firs
    delete the message (no strike), so a mistake costs nothing.
 3. **Regex rules.** Asking someone for a seed phrase or private key is the only wording that
    acts on its own, plus any custom rules admins add with `/rule add`. Unicode lookalikes and
-   invisible characters are folded first so `USDТ` with a Cyrillic T still matches.
+   invisible characters are folded first, so USDT spelled with a Cyrillic T still matches.
 4. **Soft scoring.** Everything else is a score: commission and get-rich pitches (USDT
    schemes included), guaranteed returns, fake jobs, fake support, wallet addresses, company
    boilerplate, "DM me to earn", money words, urgency, trading signals, adult menus, emoji arrows
@@ -174,7 +170,7 @@ For every message from a non-admin, the bot runs these checks in order. The firs
    Normal talk in any kind of group ("is the sale still on?", "did anyone get the airdrop?",
    "never share your password") scores too low to matter.
 5. **AI judge.** Gray-zone messages go to Claude (model and effort set in `.env`) which returns a
-   strict spam / not spam verdict with a confidence. The bot acts only above the confidence
+   strict verdict, spam or not spam, with a confidence. The bot acts only above the confidence
    threshold. If the API fails, nothing is deleted.
 6. **Action.** Delete the message, then apply the strike ladder. Every action is written to
    the audit log and posted to the mod-log group with Undo and Why buttons. If `N8N_EVENT_URL` is
@@ -208,7 +204,7 @@ the mod log. All three steps are configurable per group (section 6).
 
 "Like and follow TikTok videos, earn 200-800 USD daily, message me", "rate products for
 commission on every task", "deposit to unlock VIP tasks", a WhatsApp recruiter with a salary
-per day, in English, Tagalog/Taglish (₱, GCash), Spanish and the other rule languages. The
+per day, in English, Tagalog and Taglish (peso amounts, GCash), Spanish and the other rule languages. The
 soft rules `job_bait`, `task_scam`, `easy_money` and `pay_rate`, next to a contact line, add up
 quickly. Two things are different from other scams:
 
@@ -221,14 +217,14 @@ quickly. Two things are different from other scams:
   0 = never). Undone actions do not count. A job pitch mixed with a crypto pitch (USDT
   commission, wallet addresses) is handled as a normal scam. `/test` shows which applies.
 
-`/set job_rules off` turns all of this off for one group: it then keeps exactly the rules and
-handling it had before the job rules were added (the rules marked `only: jobs` in rules.yaml are
-skipped and the old `only: no_jobs` versions used).
+`/set job_rules off` turns all of this off for one group: the rules marked `only: jobs` in
+rules.yaml are skipped, the plainer `only: no_jobs` versions are used instead, and job offers get
+the normal handling.
 
 ### Account phishing
 
 "Your account will be deleted in 24 hours, verify it here: telegram-verify-center.com", fake
-Telegram / Meta / GCash support, a page "violating community standards", and above all anyone
+Telegram, Meta or GCash support, a page "violating community standards", and above all anyone
 asking for a **login code, OTP or two-step password**, which is how Telegram accounts get
 stolen. The soft rules `code_request` (5), `account_threat`, `verify_link`, `brand_domain` (a
 made-up domain pairing a brand with a security word), `phish_deadline`, `kyc_selfie`,
@@ -240,8 +236,8 @@ or more sure it is phishing, `impersonation_action` applies (ban by default, no 
 Only if the judge is off or not set up do the rules act alone. "Never share your OTP" and
 "the app sends an OTP" do not count as a request.
 
-`/set phishing_rules off` turns this off for one group (it keeps the rules it had before, the
-new ones are marked `only: phishing`).
+`/set phishing_rules off` turns this off for one group (the rules marked `only: phishing` are
+skipped).
 
 ### Join gate
 
@@ -290,8 +286,7 @@ these also work from the private chat with the bot, or as a reply to the person'
 
 Any command also works with the bot tagged in front of it: `@zyroguard_bot /spam` (as a reply)
 does exactly what `/spam` does. Telegram only counts a command at the very start of a message,
-so until 2026-10-14 the tagged form was taken as a question for ZyroMod instead. A tag
-for another bot, a command in the middle of a sentence or a path like `/usr/bin` is left alone.
+so the bot moves its own tag out of the way first. A tag for another bot, a command in the middle of a sentence or a path like `/usr/bin` is left alone.
 
 ---
 
@@ -385,17 +380,17 @@ review is `tools/similarity_report.py` (read-only, run it inside the container t
 `tools/health_check.py`): every match that would have changed a verdict, what happened to that
 sender anyway, and which examples do the matching.
 
-**Learning from sure catches** (`similarity_learn`, off by default until the meaning-match trial is reviewed). When the bot acts in
+**Learning from sure catches** (`similarity_learn`, off by default). When the bot acts in
 enforce mode on a message the AI judge was 95% or more sure about, or on a strong rule hit
 (the score passes the hard threshold without the meaning match's own points, or a seed-phrase
-request or 🔞 marker), the message becomes a spam example for that group. It waits 24 hours
+request or the 18+ emoji marker), the message becomes a spam example for that group. It waits 24 hours
 first and only starts counting if nobody undid the action; `/undo` drops it at any time, and
 `/forget` stops it while it waits. Name checks, house rules and language deletes are never
 learned. At most 20 a day per group, and a text that is already known or already waiting is
 not stored twice. Works in `shadow` as well as `on` (the library grows while you review), not
 in shadow *mode* for the group (nothing was really acted on there).
 
-**Examples for the AI judge** (`judge_examples`, off by default until the meaning-match trial is reviewed). When a message goes to the
+**Examples for the AI judge** (`judge_examples`, off by default). When a message goes to the
 judge, it also sees up to 3 labeled examples closest in meaning (0.60 or closer), spam or
 normal, as precedent. That is how a `/notspam` or `/undo` correction reaches the judge: a
 message very close to one the admins marked normal is judged with that in view. The example
@@ -432,10 +427,10 @@ event. `/resume` ends the pause early.
 | Key | Default | What it does |
 |---|---|---|
 | `captcha` | `on` | Gate new members behind a verify button. |
-| `captcha_mode` | `emoji` | `emoji` = pick the word for a picture, `math` = answer a simple sum, `button` = just tap. |
+| `captcha_mode` | `emoji` | `emoji`: pick the word for a picture. `math`: answer a simple sum. `button`: just tap. |
 | `captcha_time` | `2m` | Time allowed to pass. Shortcut `/setcaptchatime 5m`. |
 | `captcha_fail` | `kick` | What happens on timeout. Shortcut `/setcaptchafail ban 1d`. |
-| `captcha_every_join` | `on` | Everyone gets the captcha each time they join, even if they passed it before and left. `off` = only the first time. |
+| `captcha_every_join` | `on` | Everyone gets the captcha each time they join, even if they passed it before and left. `off`: only the first time. |
 | `strict_unverified` | `on` | Delete everything an unverified newcomer sends. |
 | `skip_verified_anywhere` | `off` | Trust users who passed the captcha in any group this bot serves. |
 | `restrict_window` | `24h` | Newcomer rules (no links or forwards) last this long after verifying. `0` disables. Shortcut `/setrestrict 72h`. |
@@ -452,24 +447,24 @@ event. `/resume` ends the pause early.
 
 | Key | Default | What it does |
 |---|---|---|
-| `link_policy` | `new` | `all` = allow links, `new` = block links from new members, `allowlist` = only allowlisted domains for everyone. |
-| `media_unverified` | `allow` | `allow` = images from new members are judged by content like everyone else's; `delete` = remove all media from new members for their first day. |
+| `link_policy` | `new` | `all`: allow links. `new`: block links from new members. `allowlist`: only allowlisted domains, for everyone. |
+| `media_unverified` | `allow` | `allow`: images from new members are judged by content like everyone else's. `delete`: remove all media from new members for their first day. |
 | `forward_captcha` | `on` | Anyone (except admins and trusted users) who forwards a message gets a quick captcha as a reply. Solved: the forward stays. Not solved in time or 3 wrong taps: the forward is removed and they get a strike, so the strike ladder decides (by default mute 1 day, then ban 30 days, then ban). Enforce mode only. |
 | `forward_captcha_time` | `2m` | How long the forwarder has to solve it. |
-| `languages` | empty | Languages people may write in, e.g. `en` or `en,tl` (names work too: `/set languages English, Tagalog`). Empty or `all` = every language. A message in another language is just deleted: no strike, no mute. Short or mixed messages ("ok", "gm", Taglish with plenty of English) count as unknown and are never deleted for their language. A scam in any language is still punished as spam. |
-| `language_scope` | `new` | Who the languages rule applies to: `new` = new members only, `all` = everyone except admins and trusted users. |
-| `protected_names` | empty | Names only admins may use, comma separated, e.g. `/set protected_names YourBrand`. Anyone else whose display name or username copies one with lookalike letters (a small L in place of a capital I, a 1 or 0 in place of a letter, a Cyrillic Р, small caps) is removed when they join and on any message, with `impersonation_action`. Using the real spelling ("YourBrand fan") is allowed, it only adds a little weight to a message that also looks like a pitch. "ZyroGuard" is protected in every group. |
+| `languages` | empty | Languages people may write in, e.g. `en` or `en,tl` (names work too: `/set languages English, Tagalog`). Empty or `all` means every language. A message in another language is just deleted: no strike, no mute. Short or mixed messages ("ok", "gm", Taglish with plenty of English) count as unknown and are never deleted for their language. A scam in any language is still punished as spam. |
+| `language_scope` | `new` | Who the languages rule applies to: `new`: new members only. `all`: everyone except admins and trusted users. |
+| `protected_names` | empty | Names only admins may use, comma separated, e.g. `/set protected_names YourBrand`. Anyone else whose display name or username copies one with lookalike letters (a small L in place of a capital I, a 1 or 0 in place of a letter, a Cyrillic P, small caps) is removed when they join and on any message, with `impersonation_action`. Using the real spelling ("YourBrand fan") is allowed, it only adds a little weight to a message that also looks like a pitch. "ZyroGuard" is protected in every group. |
 | `similarity` | `shadow` | The meaning match (see "Teaching by example"): `shadow` records close matches without counting them, `on` adds them to the score, `off` skips it. |
 | `similarity_learn` | `off` | Sure catches become spam examples for the group after a 24-hour wait, unless undone. |
 | `judge_examples` | `off` | The AI judge also sees up to 3 labeled examples closest in meaning. |
-| `impersonation_action` | `ban` | Used for lookalike names, for fake "the contract address is moving / old tokens will be burned" notices that pass the hard score, and for messages the AI judge is at least 95% sure are impersonation, phishing or a wallet scam. Skips the strike ladder: fake admins do not get a warning mute first. |
+| `impersonation_action` | `ban` | Used for lookalike names, for fake "the contract address is moving" or "old tokens will be burned" notices that pass the hard score, and for messages the AI judge is at least 95% sure are impersonation, phishing or a wallet scam. Skips the strike ladder: fake admins do not get a warning mute first. |
 | `flood_count` | `5` | Messages inside the window that count as flooding. Shortcut `/setflood 5 10s` sets both. |
 | `flood_window` | `10s` | The window. |
 | `flood_action` | `mute 1h` | Action on flooding. Shortcut `/setfloodmode kick`. |
 | `repeat_count` | `3` | Identical text from this many different users within 10 minutes is a spam wave. |
-| `job_rules` | `on` | Find fake job and task offers. `off` = the group keeps the rules it had before they were added. |
-| `phishing_rules` | `on` | Find account phishing and login-code / OTP requests; they always go to the AI judge. `off` = the group keeps the rules it had before. |
-| `job_strike_after` | `5` | Fake job and task offers are only deleted until the same person's Nth one here, then the strike ladder applies. 1 = from the first, 0 = never. |
+| `job_rules` | `on` | Find fake job and task offers. `off` skips these rules in the group. |
+| `phishing_rules` | `on` | Find account phishing and requests for login codes or OTPs; they always go to the AI judge. `off` skips these rules in the group. |
+| `job_strike_after` | `5` | Fake job and task offers are only deleted until the same person's Nth one here, then the strike ladder applies. 1 means from the first, 0 means never. |
 
 ### Claude judge
 
@@ -488,8 +483,8 @@ working on rules alone until the next day. It exists so a spam wave or someone d
 posting borderline text cannot run up the bill. 500 is far more than a normal group uses.
 Raise it with `/set judge_daily_cap 2000` only if `/stats` shows the cap being reached.
 
-The model and effort are set server-wide in `.env` (`JUDGE_MODEL`, `JUDGE_EFFORT`).
-Current setting on the server: Opus 5, high effort, routed through an API gateway. Sonnet 5 at low effort is the cheaper option with the same request shape.
+The model and effort are set server-wide in `.env` (`JUDGE_MODEL`, `JUDGE_EFFORT`). A smaller
+model at low effort is the cheaper option with the same request shape.
 
 ### Strikes
 
@@ -511,14 +506,14 @@ Warnings and automatic strikes share the same counter.
 | Command | What it does |
 |---|---|
 | `/stats [dur]` | Actions in the last 24h (or `7d`, `30d`): by action, by rule, judge calls, undos. |
-| `/log [n]` | Last n actions with their numbers, plus Why / Undo buttons for the latest five. |
+| `/log [n]` | Last n actions with their numbers, plus Why and Undo buttons for the latest five. |
 | `/undo <id>` | Reverse an action by its number (shown in every log-group post and in `/log`): restores the user and clears the strike. |
 | `/why <id>` | Explain exactly which rule or judge verdict caused an action. Also works as a reply to a bot action. |
 
 Every log-group post ends with its action number so `/why` and `/undo` always resolve.
 
 **Reports.** Every action (or would-be action in shadow mode) is posted with the user, the
-reason, the duration and expiry, and Undo / Why buttons. Reports go to the group's log chat
+reason, the duration and expiry, and Undo and Why buttons. Reports go to the group's log chat
 if one is set, otherwise to the private chat of the user who added the bot, otherwise to the
 server-wide log group. The bot also posts a daily summary at `digest_time`. If
 `N8N_EVENT_URL` is set, n8n receives a copy of every event on the `zyroguard-event` webhook.
@@ -542,7 +537,7 @@ Common fixes:
 | "I am missing the 'Ban users' right" in a report | Give the bot Delete messages, Ban users, Invite users via link. |
 | Captcha shows but nobody is muted | Group is in shadow mode. `/mode enforce`. |
 | Claude line red in `/diag` | Key or base URL wrong in `.env` on the server. |
-| Bot left the group | It was added by someone without access, or by a user who is not an admin of that group. Get access first (section 15), then add it again as a group admin. |
+| Bot left the group | It was added by someone without access, by a user who is not an admin of that group, or by an anonymous admin, whose account Telegram hides. Get access first (section 15), turn off Remain anonymous for yourself in that group, then add it again as a group admin. |
 
 ---
 
@@ -562,13 +557,13 @@ These live in `/opt/zyroguard/.env` on the server and need a container restart t
 | `BOT_TOKEN` | From BotFather. Secret. |
 | `ANTHROPIC_API_KEY` | Claude key, or the key for your API gateway. Secret. |
 | `ANTHROPIC_BASE_URL` | Your gateway's URL, to route through an Anthropic-compatible gateway. Empty for Anthropic direct. |
-| `JUDGE_MODEL`, `JUDGE_EFFORT` | `claude-opus-5`, `high`. |
+| `JUDGE_MODEL`, `JUDGE_EFFORT` | `claude-opus-5` and `low` by default. |
 | `OWNER_IDS` | The Telegram user id of the bot owner, the one person who runs the bot. |
 | `ALLOWED_CHAT_IDS` | Groups the bot serves from the start. Groups you add later are remembered in the database. Anyone else adding the bot makes it leave. |
 | `MODLOG_CHAT_ID` | Default mod-log chat for groups that have not set their own. |
 | `MODE` | Default mode for new groups, `shadow`. |
 | `CAS_ENABLED` | Server-wide switch for CAS lookups. |
-| `SIMILARITY` | Server-wide switch for the meaning match, `on` by default. Set `off` to skip loading the model (saves about 300 MB of memory). |
+| `SIMILARITY` | Server-wide switch for the meaning match, `on` by default. Set `off` to skip loading the model (saves about 600 MB of memory). |
 | `N8N_EVENT_URL`, `N8N_EVENT_SECRET` | Where to mirror events, and the header secret both sides check. Without the secret the internal `/stats` endpoint is off. |
 | `OWNER_LEDGER_URL`, `OWNER_LEDGER_SECRET` | Optional private activity record (groups added or refused, access changes, admin actions and setting changes with old and new values, a daily summary per group, a month-end snapshot), sent as Google Sheets API calls to a webhook such as an n8n workflow. Members' message text is never included. Events wait in the database until the webhook takes them. |
 
@@ -594,7 +589,7 @@ ssh root@YOUR_SERVER "cd /opt/zyroguard && docker compose logs --tail=100"
 4. Put the three ids in `.env`, restart.
 5. `/diag` in the group. Every line green.
 6. `/test We are Royal Dynasty International looking for USDT holders, 10% commission` should
-   show matched rules and "would delete + mute".
+   show matched rules and "would delete and mute".
 7. Watch the mod log in shadow mode for a few days.
 8. `/mode enforce`.
 
@@ -645,7 +640,7 @@ The bot remembers the last 4 exchanges between one person and itself in one chat
 A group can give ZyroGuard its own FAQ and product files. Members then ask with `/ask` and get
 answers taken only from those files. When the files do not have the answer, the member gets the
 group's can't-answer message with the support email and an optional contact button. Every group
-has its own files, email and link; one client never sees another's.
+has its own files, email and link; one group never sees another's.
 
 **Setup, in a private chat with the bot.** An admin sends `/zyromod` (in the group it replies
 with a button that opens the private chat, so members never see the files). The first time it
@@ -657,11 +652,8 @@ walks through four steps:
 3. Contact link (optional): any link (ticket page, Discord, website, a Telegram chat), shown as a
    button with your own button text.
 4. Instructions for me (optional, Skip button): how the bot should answer in this group, up to
-   1500 characters. The step shows a tap-to-copy example in the same shape:
-   "Tone: friendly and natural. Simple words, short and organized answers. / Do: if a question is
-   unclear, ask what they mean instead of guessing. End answers with our guide for more details:
-   https://yourcompany.com/help / Don't: mention other products or competitors. If someone brings
-   up politics or uses offensive words, say you can only help with questions about our product."
+   1500 characters. The step shows a tap-to-copy example, the same one as in the setup guide
+   above.
 
 Then a preview of the can't-answer message, a test box ("Test a question", members do not see
 it, and it names the closest matching file and section), and **Turn on**. After that,
@@ -681,10 +673,10 @@ the can't-answer message, nothing is invented, and the instructions are never re
 instructions set, every question addressed to the bot goes to the AI, even ones far from the
 files, so rules like "say you can't help with politics" apply (about 2 US cents each); without
 them, clearly unrelated questions get the can't-answer message with no AI call. Saving refuses
-passwords and keys, short links and sites on the group's block list. Tested 2026-10-13 with the
-real model: with "point members to our documentation" the install answer ended with the docs
-link, a competitor comparison and an insult got a one-line refusal, "who should I vote for?" got
-"I can't help with that.", and a weather question still got the can't-answer message.
+passwords and keys, short links and sites on the group's block list. For example, with "point
+members to our documentation" an install answer ends with the docs link, a competitor comparison
+or an insult gets a one-line refusal, "who should I vote for?" gets "I can't help with that.", and
+a weather question still gets the can't-answer message.
 
 **In the group.**
 
@@ -717,7 +709,7 @@ their address; code blocks stay copyable and comments inside them are never take
 lose their page numbers, words split across lines are joined again, and short title lines start a
 new section. Running headers and footers are removed from PDFs of 4 pages or more (a line repeated
 at the top or bottom of most pages); shorter PDFs keep them, which only adds a harmless extra line
-to a section (seen in the 2-page test PDF on 2026-10-14). Each file remembers which reader version cut it
+to a section. Each file remembers which reader version cut it
 (`kb.READER_VERSION`, now 2): after a reader update the menu marks older files "send it again", and
 sending the same file again is accepted instead of refused as a duplicate.
 
@@ -727,8 +719,7 @@ uses, so nothing extra is loaded. A question is matched by meaning (works across
 rewording) and by keywords (exact names and numbers). Clearly unrelated questions get the
 can't-answer message without any AI call. Otherwise Claude gets the matching sections (a small
 FAQ, under about 16,000 characters, is sent whole and cached, so more questions within minutes cost a
-tenth) and must answer only from them or reply that it cannot. Thresholds were calibrated on
-2026-10-13 with `tools/support_calibrate.py`.
+tenth) and must answer only from them or reply that it cannot.
 
 **Limits.** 10 MB of files per group and about 1.5 million characters of text (roughly 600 dense
 pages), whichever comes first: reading stops there so a huge file cannot slow the server. Scanned
@@ -765,7 +756,7 @@ chat with the bot on Telegram until they delete it there.
 | `support_email` | empty | Shown when the bot can't answer. Required while support is on. |
 | `support_link` | empty | Optional contact button link. Any `https` link, no short links. |
 | `support_link_label` | `Contact the team` | Text on that button, up to 40 characters. |
-| `support_text` | empty | Your own can't-answer message, up to 500 characters. Empty = the default. The email is added under it, unless the message already contains it. |
+| `support_text` | empty | Your own can't-answer message, up to 500 characters. Empty means the default. The email is added under it, unless the message already contains it. |
 | `support_instructions` | empty | Instructions for the bot's answers in this group (tone, do's and don'ts, links or details to include), up to 1500 characters. Easiest to set in `/zyromod`, Instructions for me. |
 
 The daily summary and `/stats` show "Support questions: N answered, M I couldn't answer. Details in /zyromod".
@@ -798,7 +789,7 @@ Safety calls count toward the same `judge_daily_cap` as the spam judge.
 
 ## 14. Contact the admin
 
-Anyone who meets the bot can reach the admin. A "✉️ Contact the admin" button appears on the `/start` message, when the bot leaves a group it does not guard, and when a stranger tries to ask it questions. `/contact` in a private chat does the same.
+Anyone who meets the bot can reach the admin. A "Contact the admin" button appears on the `/start` message, when the bot leaves a group it does not guard, and when a stranger tries to ask it questions. `/contact` in a private chat does the same.
 
 Flow: tap the button, the bot asks for the message, the person writes it in one go. The bot then:
 
@@ -815,7 +806,7 @@ Server settings in `.env`:
 | `CONTACT_WEBHOOK_URL` | n8n webhook that sends the email, e.g. `http://n8n:5678/webhook/zyroguard-contact-<random>` |
 | `CONTACT_WEBHOOK_SECRET` | Shared secret the n8n workflow checks before sending |
 
-n8n side: import `n8n/ZyroGuard-Contact.json`, set the secret in the "Secret ok?" node to the same value, pick your Gmail credential in the Gmail node, and switch the workflow on. Without the webhook, Telegram delivery still works and the reply to the person mentions the email address.
+n8n side: import `n8n/ZyroGuard-Contact.json`, set the secret in the "Secret ok?" node to the same value, pick your Gmail credential and put your address in **Send To** in the Gmail node, and switch the workflow on. Without the webhook, Telegram delivery still works and the reply to the person mentions the email address.
 
 ---
 
@@ -855,7 +846,7 @@ AI parts pause until the next day.
 ## 15b. Evasion handling
 
 Text is folded before matching: NFKC normalisation, zero-width and direction-control characters
-removed, Cyrillic/Greek lookalikes and small-caps letters mapped to Latin, and spaced-out
+removed, Cyrillic and Greek lookalikes and small-caps letters mapped to Latin, and spaced-out
 letters ("U S D T") squeezed back together. Hidden link targets in formatted text are
 extracted. Edits that add a link are scored higher. Forwards from newcomers are removed
 (no strike). Judge outages are reported once an hour per group, not once per message.

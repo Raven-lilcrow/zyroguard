@@ -81,7 +81,7 @@ async def test_domains_and_rules_scope():
     await store.set_domain(7, "mine.com", "allow", None)
     d = await store.domains(7)
     assert d == {"allow": {"mine.com"}, "block": {"global.com"}}
-    await store.set_domain(7, "mine.com", "block", None)  # flips allow -> block
+    await store.set_domain(7, "mine.com", "block", None)  # flips allow to block
     d = await store.domains(7)
     assert d["allow"] == set() and "mine.com" in d["block"]
     rid = await store.add_rule(0, "x", "ban", None, None, None)

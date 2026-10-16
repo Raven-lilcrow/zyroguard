@@ -1,4 +1,4 @@
-"""Fixes from the 2026-10-12 health check: lookalike brand names, fake contract-migration notices,
+"""Lookalike brand names, fake contract-migration notices,
 severe judge verdicts skip the strike ladder, adult menu words need context, lift notices."""
 from pathlib import Path
 
@@ -21,7 +21,7 @@ BRANDS = ["AcmeAI"]
     "AcmeAl",                           # small L for the capital I
     "AcmeAl | Community Discussion",
     "Acm3AI", "Acme Al", "ACM3 AI",
-    "Аcme AI",                          # Cyrillic А
+    "Аcme AI",                          # a Cyrillic A
     "ᴀᴄᴍᴇᴀɪ",                           # small caps
 ])
 def test_lookalike_brand_names_are_caught(name):

@@ -16,7 +16,7 @@ from .test_languages import RULES
 
 
 class WordEmbedder:
-    """Bag of words hashed into 256 buckets. Same words = same vector."""
+    """Bag of words hashed into 256 buckets. Same words, same vector."""
     model = "test-words"
 
     def load(self):
@@ -86,7 +86,7 @@ async def test_shadow_records_but_does_not_count(app, lib):  # noqa: F811
     await lib.add(CHAT, "spam", PITCH, "admin", ADMIN)
     for _ in range(8):
         await app.store.touch_member(CHAT, SPAMMER, "spammy", "Spam", count_message=True)
-    await process(app, msg(PITCH))                     # default similarity = shadow
+    await process(app, msg(PITCH))                     # the default similarity is shadow
     assert "delete_message" not in app.bot.names()
     cur = await app.store.db.execute("SELECT applied, kind_with, kind_without FROM similarity_log")
     assert [tuple(r) for r in await cur.fetchall()] == [(0, "judge", "clean")]
@@ -152,7 +152,7 @@ async def test_undo_turns_the_message_into_a_known_good_example(app, lib):  # no
     assert m.points == -2 or m.spam_id is None      # the identical spam example was switched off
 
 
-# ---- /spam that works after I already removed the message (2026-10-13) ----------------
+# /spam that works after I already removed the message
 
 def _quiet_replies(monkeypatch) -> list[str]:
     from types import SimpleNamespace
@@ -173,7 +173,7 @@ def _cmd(name: str, arg: str | None = None):
 async def test_spam_says_whether_examples_count_yet(app, lib, monkeypatch):  # noqa: F811
     from zyroguard.commands import _teach
     replies = _quiet_replies(monkeypatch)
-    await _teach(reply_to(PITCH, "/spam"), app, _cmd("spam"), "spam")            # default similarity = shadow
+    await _teach(reply_to(PITCH, "/spam"), app, _cmd("spam"), "spam")            # the default similarity is shadow
     assert replies[0].startswith("Learned #") and "still in its trial" in replies[0]
     assert "/set similarity on" in replies[0] and "score higher" not in replies[0]
     await app.settings.set(CHAT, "similarity", "on", ADMIN)

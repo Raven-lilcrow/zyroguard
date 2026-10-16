@@ -37,7 +37,7 @@ async def diag_report(app: App, chat_id: int, title: str | None) -> str:
             todo.append(fix)
         return f"{OK if ok else BAD} {text}"
 
-    # -- rights
+    # Rights
     try:
         me = await app.bot.get_me()
         reads_all = bool(me.can_read_all_group_messages) or rights.is_admin
@@ -52,7 +52,7 @@ async def diag_report(app: App, chat_id: int, title: str | None) -> str:
              "Open @BotFather › /setprivacy › pick this bot › Disable, then remove and re-add me to the group."),
     ])
 
-    # -- connections
+    # Connections
     customer = await app.store.chat_owner(chat_id)
     is_customer = customer is not None and not app.config.is_owner(customer)
     conn = []
@@ -84,7 +84,7 @@ async def diag_report(app: App, chat_id: int, title: str | None) -> str:
     if not len(admins):
         conn.append(mark(False, "admin list", "I could not read the admin list. Make sure I am an admin and try again."))
 
-    # -- mode
+    # Mode
     mode = cs.raw("mode")
     if app.is_paused(chat_id):
         mode_line = "paused, I watch but do nothing until /resume"
@@ -93,7 +93,7 @@ async def diag_report(app: App, chat_id: int, title: str | None) -> str:
     else:
         mode_line = "shadow, I only report what I would do"
 
-    # -- setup
+    # Setup
     if cs.bool("captcha"):
         how = {"emoji": "pick the right word for a picture", "math": "answer a small sum",
                "button": "tap a button"}.get(cs.raw("captcha_mode"), "pass the captcha")

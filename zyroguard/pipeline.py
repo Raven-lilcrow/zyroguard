@@ -64,7 +64,7 @@ def phishing_offer(matched: list[str]) -> bool:
 async def _job_decision(app: App, m: Message, cs: ChatSettings, source: str, reason: str,
                         detail: dict[str, Any]) -> Decision:
     """Delete only, no strike, until this person's job_strike_after-th job scam here; from then on
-    the normal strike ladder (decided 2026-10-13: just delete them, after 5 the ladder applies)."""
+    the normal strike ladder (by default the 5th)."""
     limit = cs.int("job_strike_after")
     nth = await app.store.job_catches(m.chat.id, m.from_user.id) + 1
     detail = {**detail, "job_scam": True, "job_count": nth}
@@ -72,8 +72,8 @@ async def _job_decision(app: App, m: Message, cs: ChatSettings, source: str, rea
         return Decision(source, f"{reason} (number {nth} from this person)", "delete", None, add_strike=True,
                         detail=detail)
     return Decision(source, reason, "delete", None, add_strike=False, detail=detail)
-_last_outage_notice: dict[int, float] = {}    # chat_id -> monotonic time of the last "judge down" report
-_cap_notice_day: dict[int, str] = {}          # chat_id -> day the "cap reached" line was logged
+_last_outage_notice: dict[int, float] = {}    # per chat_id: monotonic time of the last "judge down" report
+_cap_notice_day: dict[int, str] = {}          # per chat_id: the day the "cap reached" line was logged
 
 
 def media_type(m: Message) -> str | None:
@@ -116,7 +116,7 @@ def _entity_urls(m: Message) -> str:
 
 
 def forward_source(m: Message) -> str:
-    """Name of whoever a forward came from: channel title/@username, user or hidden name."""
+    """Name of whoever a forward came from: a channel's title or @username, a user, or a hidden name."""
     o = m.forward_origin
     if o is None:
         return ""
@@ -131,7 +131,7 @@ def forward_source(m: Message) -> str:
 
 def extra_text(m: Message) -> str:
     """What members see besides the message body: inline button labels and URLs, and the
-    name of the forward source. Spam hides its link and its 🔞 there."""
+    name of the forward source. Spam hides its link and its 18+ emoji there."""
     parts = []
     src = forward_source(m)
     if src:
@@ -202,7 +202,7 @@ async def photo_bytes(app: App, m: Message) -> tuple[bytes | None, str]:
 
 async def decide(app: App, m: Message, cs: ChatSettings, view: MessageView, verdict: Verdict) -> Decision | None:
     """Translate a verdict into a Decision, calling the judge when needed."""
-    jobs_on = cs.bool("job_rules")       # off: this group keeps the pre-2026-10-13 handling
+    jobs_on = cs.bool("job_rules")       # off: job offers get the normal rules and strike ladder in this group
     job = jobs_on and job_offer(verdict.matched)
     to_judge = verdict.kind == "judge"
     if verdict.kind == "hard" and job and verdict.score < 100:
@@ -228,7 +228,7 @@ async def decide(app: App, m: Message, cs: ChatSettings, view: MessageView, verd
             return Decision("flood", verdict.reason, action, dur, add_strike=False,
                             detail={"matched": verdict.matched})
         if set(verdict.matched) <= HOUSE_RULES:
-            # a house rule for newcomers (no links / media / bot mentions yet): just remove it,
+            # a house rule for newcomers (no links, media or bot mentions yet): just remove it,
             # no strike and no "new account" escalation, they may simply not know the rule
             return Decision("rule", verdict.reason, "delete", None, add_strike=False,
                             detail={"matched": verdict.matched, **verdict.detail})
@@ -242,7 +242,7 @@ async def decide(app: App, m: Message, cs: ChatSettings, view: MessageView, verd
         return None
 
     if not await app.ai_budget_ok(m.chat.id):
-        return None  # this customer's daily AI budget is used up; rules still apply
+        return None  # this user's daily AI budget is used up; rules still apply
     img, mime = (await photo_bytes(app, m)) if m.photo else (None, "image/jpeg")
     facts = {
         "new_member": view.is_new_member, "verified": view.is_verified,

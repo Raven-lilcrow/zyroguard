@@ -76,7 +76,7 @@ def command(text: str, user_id: int = ADMIN) -> tuple[Message, SimpleNamespace]:
     return m, SimpleNamespace(command=parts[0].lstrip("/"), args=parts[1] if len(parts) > 1 else None)
 
 
-# ---- what gets recorded ----------------------------------------------------------
+# What gets recorded
 
 async def test_setting_change_is_recorded_with_old_and_new_value(app):
     await app.settings.set(CHAT, "flood_count", "8", ADMIN)
@@ -138,7 +138,7 @@ async def test_pause_and_resume_are_recorded(app):
     assert [r["kind"] for r in await events(app)] == ["resume", "pause"]
 
 
-# ---- the bot joining and leaving groups ---------------------------------------------
+# The bot joining and leaving groups
 
 async def test_refused_add_is_recorded_and_the_owner_is_told(app):
     await on_my_chat_member(added_event(THEIR_GROUP, STRANGER), app)
@@ -183,7 +183,7 @@ async def test_removal_and_lost_rights_are_recorded(app):
     assert removed["actor_id"] == ADMIN
 
 
-# ---- access that ends ---------------------------------------------------------------
+# Access that ends
 
 async def test_ended_access_stops_service_at_once_and_is_recorded_once(app):
     await app.store.add_permit(CUSTOMER, "cust", 1, utcnow() + timedelta(hours=1), None, ADMIN)
@@ -228,7 +228,7 @@ async def test_permit_and_revoke_commands_are_recorded(app):
     assert row[11].startswith("2 group(s)") and row[12].startswith("3 group(s)") and "paid" in row[10]
 
 
-# ---- sending to the sheet ------------------------------------------------------------
+# Sending to the sheet
 
 async def test_events_go_to_the_month_tab_in_manila_time_and_are_sent_once(app, monkeypatch):
     sent: list = []
@@ -293,7 +293,7 @@ async def test_post_sends_the_secret_and_needs_an_ok_answer(app):
         await runner.cleanup()
 
 
-# ---- Groups, Access, daily summary, month end ----------------------------------------
+# Groups, Access, daily summary, month end
 
 async def test_groups_and_access_rows(app):
     await app.store.add_permit(CUSTOMER, "cust", 2, utcnow() + timedelta(days=10), "paid", ADMIN)
@@ -341,7 +341,7 @@ async def test_month_end_snapshot_once_and_never_before_the_record_started(app):
     assert ledger.month_tab(datetime.fromisoformat(snap["ts"])) == "Oct 2026"
 
 
-# ---- owner commands --------------------------------------------------------------------
+# Owner commands
 
 async def test_history_and_ledger_commands(app):
     await app.settings.set(CHAT, "mode", "shadow", ADMIN)

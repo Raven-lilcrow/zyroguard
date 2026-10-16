@@ -3,7 +3,7 @@
 Setup happens in a private chat: an admin sends /zyromod, picks the group, sends .txt, .md or
 .pdf files (10 MB per group), and sets what members get when I cannot answer: a support email
 (required) and an optional contact link with its own button text. Every group has its own
-files, email and link, so one client never sees another's.
+files, email and link, so one group never sees another's.
 
 In the group, members ask with /ask, by @mentioning me, or by replying to one of my messages.
 The answer comes only from the group's files. When the files do not cover the question, the
@@ -11,9 +11,9 @@ member gets the group's can't-answer message with the email and the contact butt
 who asks a plain question without tagging me is told how to ask, at most once a day per person.
 
 Who may change what
-- any admin of the group (also bot admins, the permit holder, the bot owner): files, on/off,
+- any admin of the group (also bot admins, the user who added me, the bot owner): files, on/off,
   hints, test questions, the unanswered list
-- only the group's creator, admins who may add admins, the permit holder and the bot owner:
+- only the group's creator, admins who may add admins, the user who added me and the bot owner:
   the email, the contact link and the can't-answer message, because those decide where
   members are sent. Every contact change is posted to the group's reports.
 """
@@ -58,7 +58,7 @@ ONLY_FULL_ADMINS = ("Only the group's creator, admins who can add new admins, or
 NOT_ADMIN = "You're not an admin of that group anymore."
 
 
-# ---- small helpers ------------------------------------------------------------------
+# Small helpers
 
 def _mb(n: int) -> str:
     return f"{n / (1024 * 1024):.1f} MB"
@@ -100,7 +100,7 @@ async def ready_problem(app: App, chat_id: int, cs: ChatSettings) -> str | None:
 
 
 async def setting_problem(app: App, user_id: int, chat_id: int, key: str, value: str | None) -> str | None:
-    """Checks for /set and /unset on support settings. value None means /unset. None = fine."""
+    """Checks for /set and /unset on support settings. value None means /unset. Returns None when it is fine."""
     if key not in SUPPORT_KEYS:
         return None
     if key in CONTACT_KEYS and not await may_edit_contacts(app, user_id, chat_id):
@@ -161,7 +161,7 @@ async def report_change(app: App, chat_id: int, key: str, old: str, new: str, us
         f"Before: {shown(old)}\nNow: {shown(new)}\nChanged by {by}"))
 
 
-# ---- what members see ------------------------------------------------------------------
+# What members see
 
 def contact_markup(cs: ChatSettings) -> InlineKeyboardMarkup | None:
     link = cs.raw("support_link").strip()
@@ -204,7 +204,7 @@ async def send_fallback(m: Message, cs: ChatSettings) -> None:
 
 
 def parse_reply(text: str) -> tuple[str, str]:
-    """('none' | 'partial' | 'full', text to show)."""
+    """(how much is covered: 'none', 'partial' or 'full', and the text to show)."""
     t = text.strip()
     if t.upper().startswith(NO_ANSWER) or (NO_ANSWER in t and len(t) < 60):
         return "none", ""
@@ -308,7 +308,7 @@ async def after_clean(app: App, m: Message) -> bool:
     return True
 
 
-# ---- the answer's look ----------------------------------------------------------------------
+# The answer's look
 
 _FILLER_START = re.compile(
     r"(?i)^(?:(?:great|good|nice|excellent) question[.!,]*\s*"
@@ -416,11 +416,11 @@ def format_answer(text: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(out)).strip()
 
 
-# ---- answering -----------------------------------------------------------------------------
+# Answering
 
 @dataclass
 class Result:
-    status: str                    # answered | partial | no_match | not_in_files | unavailable | cap | error
+    status: str                    # answered, partial, no_match, not_in_files, unavailable, cap or error
     text: str = ""                 # HTML, ready to send
     best: float | None = None
     sources: list[str] = field(default_factory=list)
@@ -512,12 +512,12 @@ async def answer(app: App, m: Message, question: str, cs: ChatSettings) -> None:
         await m.reply(re.sub(r"<[^>]+>", "", r.text)[:3500], reply_markup=markup)
 
 
-# ---- setup in a private chat (/zyromod) -----------------------------------------------------
+# Setup in a private chat (/zyromod)
 
 @dataclass
 class Wizard:
     chat_id: int
-    step: str                  # files | email | link | label | text | test
+    step: str                  # files, email, link, label, text or test
     guided: bool = False
     ts: datetime = field(default_factory=utcnow)
 
@@ -973,7 +973,7 @@ async def cb_support(cb: CallbackQuery, app: App) -> None:
         if st and st.chat_id != chat_id:
             _wizard.pop(uid, None)
         if not await app.store.kb_documents(chat_id) and not cs.raw("support_email").strip():
-            await _start_or_dashboard(app, m, uid, chat_id)   # nothing set up yet: the three steps
+            await _start_or_dashboard(app, m, uid, chat_id)   # nothing set up yet: the setup steps
         else:
             await _edit_dashboard(app, cb, chat_id)
         return

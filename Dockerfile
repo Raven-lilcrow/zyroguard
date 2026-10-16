@@ -6,7 +6,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# The meaning-match model (~220 MB) is baked into the image, so the bot never downloads at
+# The meaning-match model (about 220 MB) is baked into the image, so the bot never downloads at
 # runtime and the container can keep a read-only filesystem.
 ENV FASTEMBED_CACHE_PATH=/app/models
 RUN python -c "from fastembed import TextEmbedding; TextEmbedding('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2', cache_dir='/app/models')" \

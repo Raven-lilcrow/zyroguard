@@ -1,13 +1,13 @@
 # Deploy to the server
 
 Target: your server, written `YOUR_SERVER` in the commands below (keep its address in your password
-manager, not in this repo). n8n already runs there under
-docker compose with the Caddy container. ZyroGuard joins n8n's docker network so n8n can
-reach `http://zyroguard:8080` and the bot can reach `http://n8n:5678`.
+manager, not in this repo). This guide assumes n8n already runs there under docker compose.
+ZyroGuard joins n8n's docker network so n8n can reach `http://zyroguard:8080` and the bot can reach
+`http://n8n:5678`. Without n8n, use the standalone compose file in the README.
 
 ## First deploy
 
-From this folder on Windows:
+From this folder on your computer:
 
 ```bash
 ssh root@YOUR_SERVER "mkdir -p /opt/zyroguard"
@@ -53,8 +53,8 @@ The quick way, when you are sure nobody else changed the server:
 scp -r zyroguard root@YOUR_SERVER:/opt/zyroguard/ && ssh root@YOUR_SERVER "cd /opt/zyroguard && docker compose up -d --build"
 ```
 
-**The guarded way (used for every deploy since 2026-10-13).** More than one person or session
-works on this bot, so a deploy must not overwrite a change someone else shipped. One script, run
+**The guarded way.** When more than one person works on the bot, a deploy must not overwrite a
+change someone else shipped. One script, run
 in one ssh connection (`ssh root@YOUR_SERVER "bash -s" < deploy.sh`), carries the whole local
 package as an embedded archive and on the server:
 
@@ -81,12 +81,11 @@ ssh root@YOUR_SERVER "bash -s" < deploy.sh
 Rollback is the image tag below, or copying the files back from `pre-<name>/` and rebuilding.
 `deploy.sh` holds the whole package; delete it after the deploy.
 
-Then check the live version end to end (README: "End-to-end check of a new group" and "End-to-end
-check of a full client setup"). Both run in a throwaway copy of the live image and never touch the
-live database.
+Then check the live version end to end with `tools/e2e_newgroup.py` (see Development in the
+README). It runs in a throwaway copy of the live image and never touches the live database.
 
-The server's sshd blocks an address after about 3 logins in quick succession, so do each check
-or deploy in one ssh connection.
+If your server blocks an address after several quick ssh logins (fail2ban, for example), do each
+check or deploy in one ssh connection.
 
 Rules-only change: scp `zyroguard/rules.yaml` (it is bind-mounted into the container), then `docker compose restart`.
 
@@ -110,7 +109,8 @@ Import `n8n/ZyroGuard-Modlog.json`. Set these after import:
 - Activate the workflow.
 
 The webhook path is `zyroguard-event`, so `N8N_EVENT_URL=http://n8n:5678/webhook/zyroguard-event`.
-The daily digest calls `http://zyroguard:8080/stats?since=24h` at 09:00 Asia/Manila.
+The daily digest calls `http://zyroguard:8080/stats?since=24h` at 09:00 Asia/Manila; change the
+time zone in the workflow's settings.
 The bot already posts its own mod-log lines and digest directly, so the n8n workflow is a
 second copy you can extend (Slack, email, a sheet) without touching the bot.
 
@@ -123,7 +123,7 @@ second copy you can extend (Slack, email, a sheet) without touching the bot.
 | Captcha never restricts | Group is in shadow mode. `/mode enforce`. |
 | Claude failed in `/diag` | Key missing or wrong, or outbound HTTPS blocked. Look at `docker compose logs zyroguard`. |
 | n8n failed in `/diag` | Network name mismatch, or workflow not active. Test with `docker exec zyroguard python -c "import urllib.request;print(urllib.request.urlopen('http://n8n:5678/healthz').status)"`. |
-| Bot left the group | Added by someone without access, or by a user who is not an admin there. Add it from the `OWNER_IDS` account, give that person access, or put the id in `ALLOWED_CHAT_IDS` and `docker compose up -d`. |
+| Bot left the group | Added by someone without access, by a user who is not an admin there, or by an anonymous admin (Telegram hides who that is; it only counts as yours when the `OWNER_IDS` account is an admin of that group). Add it from the `OWNER_IDS` account, give that person access, or put the id in `ALLOWED_CHAT_IDS` and `docker compose up -d`. A group on that list can be added back by anyone after a removal. |
 
 A cron job on the host runs `/opt/zyroguard/backup.sh` daily at 03:15 (server time). It makes a consistent
 copy with SQLite's backup API into `/opt/zyroguard/backup/zyroguard-<date>.db` and keeps 14 days.
@@ -136,7 +136,7 @@ scp backup.sh root@YOUR_SERVER:/opt/zyroguard/backup.sh && ssh root@YOUR_SERVER 
 Copy backups off the box now and then (they hold message excerpts):
 
 ```bash
-scp root@YOUR_SERVER:/opt/zyroguard/backup/zyroguard-$(Get-Date -Format yyyy-MM-dd).db .
+scp root@YOUR_SERVER:/opt/zyroguard/backup/zyroguard-YYYY-MM-DD.db .
 ```
 
 ## Restore

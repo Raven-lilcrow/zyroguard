@@ -1,7 +1,7 @@
 """Admin commands: moderation, lists, settings shortcuts, undo callbacks.
 
-Rose-style conventions: reply to a message or give @username / id, durations
-like 2h / 3d.
+Rose-style conventions: reply to a message or give an @username or id, and durations
+like 2h or 3d.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ router = Router(name="commands")
 GROUPS = {ChatType.GROUP, ChatType.SUPERGROUP}
 
 
-# ---- helpers ------------------------------------------------------------------
+# Helpers
 
 async def require_admin(m: Message, app: App) -> bool:
     """True when this person may run admin commands for the group the command targets.
@@ -293,7 +293,7 @@ async def _manual(m: Message, app: App, command: CommandObject, action: str, *, 
     await reply_temp(m, app, "\n".join(lines))
 
 
-# ---- moderation ----------------------------------------------------------------
+# Moderation
 
 @router.message(Command("ban"))
 async def cmd_ban(m: Message, app: App, command: CommandObject) -> None:
@@ -425,7 +425,7 @@ async def cmd_report(m: Message, app: App) -> None:
     await app.enforcer.delete(cid(m, app), m.message_id)
 
 
-# ---- meaning match: teach by example ----------------------------------------------
+# Meaning match: teach by example
 
 TOO_SHORT = "That message is too short to learn from. I need at least a sentence."
 
@@ -607,7 +607,7 @@ async def cmd_forget(m: Message, app: App, command: CommandObject) -> None:
     await reply_temp(m, app, f"Forgot example #{row['id']}. It no longer counts. /examples shows what is left.")
 
 
-# ---- lists ---------------------------------------------------------------------
+# Lists
 
 @router.message(Command("allow", "approve"))
 async def cmd_allow(m: Message, app: App, command: CommandObject) -> None:
@@ -763,7 +763,7 @@ async def rule_cmd(m: Message, app: App, command: CommandObject, chat_id: int) -
     await reply(m, "How to use:\n/rule add &lt;pattern&gt; [action]\n/rule del &lt;number&gt;\n/rule list")
 
 
-# ---- visibility ------------------------------------------------------------------
+# Visibility
 
 def _parse_since(tok: str | None) -> timedelta:
     try:
@@ -875,7 +875,7 @@ async def cb_undo(cb: CallbackQuery, app: App) -> None:
         pass
 
 
-# ---- settings shortcuts ------------------------------------------------------------
+# Settings shortcuts
 
 async def _set(m: Message, app: App, key: str, value: str) -> None:
     if key == "modlog_chat_id" and value.strip() and m.from_user:
@@ -1170,7 +1170,7 @@ async def cmd_setgreeting(m: Message, app: App, command: CommandObject) -> None:
     await _set(m, app, "greeting", command.args or "")
 
 
-# ---- /settings menu ------------------------------------------------------------------
+# /settings menu
 
 async def send_settings_menu(app: App, user_id: int, chat_id: int, title: str | None) -> bool:
     cs = await app.settings.get(chat_id)

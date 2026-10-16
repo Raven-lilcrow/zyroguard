@@ -129,7 +129,7 @@ def test_seed_phrase_bait():
 
 
 def test_confusable_evasion_still_caught():
-    # Cyrillic а/е/о inside "seed phrase"
+    # Cyrillic a, e and o inside "seed phrase"
     text = "share your sееd phrаsе to fix the wallet"
     assert fold(text) == "share your seed phrase to fix the wallet"
     v = evaluate(old_member(text), RULES, Context())

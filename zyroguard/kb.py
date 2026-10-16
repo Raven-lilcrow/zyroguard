@@ -32,18 +32,18 @@ log = logging.getLogger("zyroguard.kb")
 KINDS = {".txt": "txt", ".md": "md", ".markdown": "md", ".pdf": "pdf"}
 MAX_GROUP_BYTES = 10 * 1024 * 1024      # all of a group's files together
 MAX_GROUP_CHARS = 1_500_000   # about 600 dense pages. A 10 MB text-only PDF can hold 9M characters,
-                              # which would take ~40 minutes of the bot's one CPU to embed, so reading stops here
+                              # which would take about 40 minutes of the bot's one CPU to embed, so reading stops here
 TELEGRAM_MAX_BYTES = 20 * 1024 * 1024   # bots cannot download bigger files
 CHUNK_CHARS = 500        # the model reads about 128 tokens, so sections stay short
 MAX_HEADING = 160
 TOP_K = 8
 CONTEXT_CHARS = 9000     # excerpts sent to Claude per question
 SMALL_KB_CHARS = 16000   # a knowledge base this small (about 4k tokens) is sent whole, so the search cannot miss
-# Calibrated 2026-10-13 with the real model on a 16-question shop FAQ (tools/support_calibrate.py):
+# Calibrated with the real model on a 16-question shop FAQ:
 # a question scores only 0.20-0.65 against the section that answers it (median 0.46, also in Tagalog,
 # Spanish, Korean, Japanese, Indonesian), on-topic questions the FAQ does not answer 0.25-0.34, off-topic
 # chat 0.19 and below. So the gate only drops clearly unrelated questions and Claude decides the rest:
-# a needless Claude call costs ~2 cents, a wrong "can't answer" costs a customer.
+# a needless Claude call costs about 2 cents, a wrong "can't answer" leaves a member without help.
 MATCH = 0.22             # best meaning score below this (and no keyword hit): can't-answer, Claude not asked
 KEYWORD_MATCH = 0.60     # share of the question's rare words found in one section
 HINT_MATCH = 0.33        # an untagged question needs this to get the /ask pointer: chatter stays untouched
@@ -55,7 +55,7 @@ class ReadError(ValueError):
     """A problem with an uploaded file, worded for the admin."""
 
 
-# ---- reading ------------------------------------------------------------------
+# Reading
 
 def clean_name(name: str | None) -> str:
     base = os.path.basename((name or "").replace("\\", "/")).strip() or "file.txt"
@@ -196,7 +196,7 @@ def secret_in(text: str) -> str | None:
     return None
 
 
-# ---- cutting into sections --------------------------------------------------------
+# Cutting into sections
 
 READER_VERSION = 2       # part of each file's fingerprint, so after a reader change the same file can be sent again
 HEADING_LEVELS = 3       # a section title keeps at most this many levels of its heading path
@@ -546,7 +546,7 @@ def embed_text(heading: str | None, body: str) -> str:
     return f"{heading}\n{body}" if heading else body
 
 
-# ---- search ---------------------------------------------------------------------
+# Search
 
 _WORD = re.compile(r"\w+")
 STOP = set("""a an the and or but if of to in on at by for from with about into over is are was were be been am
@@ -668,7 +668,7 @@ def excerpts(index: Index, hits: list[Hit], budget: int = CONTEXT_CHARS) -> list
     return out
 
 
-# ---- the library itself ------------------------------------------------------------
+# The library itself
 
 @dataclass
 class Added:

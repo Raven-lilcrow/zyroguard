@@ -1,4 +1,4 @@
-"""Fake jobs and task scams (2026-10-13): the rules find them, the AI judge always decides, and
+"""Fake jobs and task scams: the rules find them, the AI judge always decides, and
 they are only deleted (no strike) until the same person's job_strike_after-th one."""
 from pathlib import Path
 from types import SimpleNamespace
@@ -77,7 +77,7 @@ def test_pay_rates_are_read_with_a_space_or_dash_before_the_amount(text):
 def test_a_crypto_pitch_with_job_words_is_not_handled_as_a_job():
     assert job_offer(["job_bait", "pay_rate", "contact_pitch"])
     assert not job_offer(["job_bait", "usdt_commission"])
-    assert not job_offer(["pay_rate", "contact_pitch"])            # pay + contact alone is not a job offer
+    assert not job_offer(["pay_rate", "contact_pitch"])            # pay and a contact alone are not a job offer
     assert not job_offer(["task_scam", "brand_name"])
 
 
@@ -130,7 +130,7 @@ async def test_the_fifth_job_scam_from_one_person_gets_the_strike_ladder(app, mo
     await _judge(app, monkeypatch)
     await _past_job_catches(app, 4)
     await process(app, msg(TASK))
-    assert "restrict_chat_member" in app.bot.names()                         # strike 1 = mute 24h
+    assert "restrict_chat_member" in app.bot.names()                         # strike 1 is a 24h mute
     assert await app.store.active_strikes(CHAT, SPAMMER) == 1
     assert (await app.store.recent_audit(CHAT, 1))[0].detail["job_count"] == 5
 
@@ -191,7 +191,7 @@ async def test_the_test_command_explains_the_job_policy(app, monkeypatch):  # no
     assert "always go to the AI judge" in out and "no strike" in out and "job scam number 5" in out
 
 
-# ---- job_rules off: a group keeps the rules and handling it had before (2026-10-13) ----
+# job_rules off: the group gets the plainer rules and the normal handling
 
 JOB_ONLY_IDS = {r.id for r in RULES.soft if r.only == "jobs"} - {r.id for r in RULES.soft if r.only != "jobs"}
 
@@ -204,7 +204,7 @@ def test_with_job_rules_off_no_new_rule_is_used(text):
 
 def test_job_rules_off_scores_a_task_scam_like_before():
     v = evaluate(MessageView(text=TASK, is_new_member=False), RULES, Context(job_rules=False))
-    assert v.kind == "clean" and v.score == 1      # what the rules gave it before the job rules existed
+    assert v.kind == "clean" and v.score == 1      # what the plainer rules give it
 
 
 async def test_job_rules_off_skips_the_gentle_handling(app, monkeypatch):  # noqa: F811
@@ -215,5 +215,5 @@ async def test_job_rules_off_skips_the_gentle_handling(app, monkeypatch):  # noq
     await process(app, msg(TASK))
     assert not seen and "delete_message" not in app.bot.names()             # the rules do not flag it
     await process(app, msg("We are migrating to a new contract address next week, details soon", message_id=43))
-    assert await app.store.active_strikes(CHAT, SPAMMER) == 1               # judge's job_scam = normal strike
+    assert await app.store.active_strikes(CHAT, SPAMMER) == 1               # the judge's job_scam category gets a normal strike
     assert "job_scam" not in (await app.store.recent_audit(CHAT, 1))[0].detail

@@ -1,5 +1,5 @@
-"""'@zyroguard_bot /spam' must run /spam (2026-10-14). Telegram only treats a command at the very start of
-a message as a command; before this fix the mention made it a question for support mode instead."""
+"""'@zyroguard_bot /spam' must run /spam. Telegram only treats a command at the very start of a message
+as a command, so without this the mention would make it a question for support mode."""
 from datetime import datetime, timezone
 from types import SimpleNamespace
 

@@ -122,7 +122,7 @@ async def test_can_be_switched_off(app):  # noqa: F811
     assert await app.store.forward_get(CHAT, SPAMMER) is None
 
 
-# ---- forum topics -----------------------------------------------------------
+# Forum topics
 
 TOPIC_HEAD = {"message_id": 500, "date": NOW, "chat": {"id": CHAT, "type": "supergroup", "title": "Test group"},
               "from": {"id": 4242, "is_bot": False, "first_name": "Topic", "username": "topic_opener"},
@@ -153,7 +153,7 @@ async def test_group_notice_lands_in_the_topic(app):  # noqa: F811
     assert notices and notices[-1][2].get("message_thread_id") == 500
 
 
-# ---- staff words in names -----------------------------------------------------
+# Staff words in names
 
 def test_staff_words_only_count_as_whole_words():
     w = RULES.impersonation

@@ -75,7 +75,7 @@ class Config:
     http_host: str
     http_port: int
     log_level: str
-    default_mode: str  # "shadow" | "enforce"
+    default_mode: str  # "shadow" or "enforce"
     extra: dict[str, str] = field(default_factory=dict)
 
     @property

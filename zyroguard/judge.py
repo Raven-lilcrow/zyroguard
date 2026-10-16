@@ -76,7 +76,7 @@ class JudgeResult:
     confidence: float
     reason: str
     error: str | None = None
-    skipped: str | None = None   # "disabled" | "cap" | "no_key"
+    skipped: str | None = None   # "disabled", "cap" or "no_key"
     input_tokens: int = 0
     output_tokens: int = 0
 
@@ -103,7 +103,7 @@ def format_examples(examples: list[dict[str, Any]]) -> str:
 
 
 def parse_verdict(raw: str) -> JudgeResult:
-    """Parse the model's text into a JudgeResult. Anything odd = not spam."""
+    """Parse the model's text into a JudgeResult. Anything odd counts as not spam."""
     m = _JSON.search(raw or "")
     if not m:
         return JudgeResult(False, "other", 0.0, "no json in reply", error="unparseable reply")
@@ -256,7 +256,7 @@ def parse_safety(raw: str, had_image: bool, stop_reason: str | None = None) -> J
 
 async def classify_safety(judge: Judge, *, chat_id: int, text: str, image_bytes: bytes | None,
                           image_mime: str, daily_cap: int | None) -> JudgeResult:
-    """Explicit / violent / harassing / hateful content check. Same client, model and cap as the judge."""
+    """Check for explicit, violent, harassing or hateful content. Same client, model and cap as the judge."""
     if not judge.client:
         return JudgeResult(False, "clean", 0.0, "no api key", skipped="no_key")
     if daily_cap is not None and daily_cap >= 0:

@@ -1,10 +1,10 @@
 # Deterministic rules. Reloaded with /reloadrules (owner) without a restart.
 #
-# hard:    match = act immediately (no Claude call). Each has an id and a regex.
-#          Regexes are matched case-insensitively against the message text with
-#          confusable characters folded to ASCII and zero-width chars removed.
-# soft:    each match adds `weight` to a score. score >= judge_threshold sends the
-#          message to Claude; score >= hard_threshold acts without Claude.
+# Hard rules act at once, without a Claude call. Each has an id and a regex, matched
+# case-insensitively against the message text after lookalike characters are folded to
+# ASCII and zero-width characters are removed.
+# Soft rules each add their `weight` to a score. A score at or above the judge threshold
+# sends the message to Claude; at or above the hard threshold the bot acts without Claude.
 # Regexes use Python `re` syntax.
 
 thresholds:
@@ -20,18 +20,18 @@ hard:
     desc: Asking for a wallet seed phrase or private key
     pattern: '(?<!never )(?<!not )(?<!don''t )(?<!dont )(?<!ever )\b(share|send|enter|provide|import|connect|submit|input|paste|type)\b.{0,40}\b(seed\s*phrase|recovery\s*phrase|mnemonic|private\s*key|12[- ]word|24[- ]word)|\b(seed\s*phrase|recovery\s*phrase|mnemonic|private\s*key)\b.{0,40}\bto\s+(sync|fix|verify|validate|restore|recover|rectify|reconnect)\b'
 
-  # 🔞 in the text, a button or the name of the channel it was forwarded from.
+  # The 18+ emoji in the text, a button or the name of the channel it was forwarded from.
   # Admins are exempt, so a rules post that uses the emoji is not affected.
   - id: adult_marker
     desc: Adult content marker (🔞)
     pattern: '🔞'
 
 soft:
-  # Adult-content spam: explicit words (❌❌❌ is folded to xxx before matching) and the
-  # "category menu" these channels post (ROUGH / FIRST TIME / BACKSTAGE / HOMEMADE).
+  # Adult-content spam: explicit words (cross-mark emoji are folded to x before matching) and the
+  # "category menu" these channels post (ROUGH, FIRST TIME, BACKSTAGE, HOMEMADE).
   # Menu words ("rough", "leak", "first time") are everyday English, so they only count next to
   # another adult signal (adult emoji, an "open here" link, a channel forward): "found a memory
-  # leak, rough day" scores nothing, while the ❌ menu forward with a button still acts.
+  # leak, rough day" scores nothing, while the menu forward with a button still acts.
   - id: adult_explicit
     weight: 4
     pattern: '\b(porn\w*|xxx+|nsfw|onlyfans|only\s*fans|hentai|nudes?|horny|sexting|sex\s*(videos?|tapes?|chat|cams?)|18\s*\+|milfs?|cam\s*girls?|escorts?|hookups?)\b'
@@ -121,7 +121,7 @@ soft:
   # ordinary on its own (people talk about jobs, pay and tasks); together with a pay rate and a
   # contact line they reach the judge. Job-only catches are handled gently, see job_strike_after.
   # `only: jobs` rules run only in groups with job_rules on (the default); `only: no_jobs` ones
-  # only where it is off, so such a group keeps the rules exactly as they were before 2026-10-13.
+  # only where it is off, so such a group keeps the plainer rule set.
   - id: contact_pitch_more
     weight: 2
     only: jobs
@@ -175,11 +175,11 @@ soft:
     weight: 1
     min_length: 400        # applies when the message is at least this long
 
-  # Account phishing: "your account will be deleted in 24 hours, verify here", fake Telegram /
-  # Meta / GCash support, and above all asking for the login code, OTP or two-step password,
+  # Account phishing: "your account will be deleted in 24 hours, verify here", fake Telegram,
+  # Meta or GCash support, and above all asking for the login code, OTP or two-step password,
   # which is how Telegram accounts are stolen. Members warning each other quote these, so the
   # pieces only add up and phishing-only hits always go to the AI judge (pipeline.phishing_offer).
-  # `only: phishing` = only in groups with phishing_rules on (the default).
+  # `only: phishing` means only in groups with phishing_rules on (the default).
   - id: code_request
     weight: 5
     only: phishing
@@ -214,14 +214,14 @@ soft:
     only: phishing
     pattern: '\b(na-?lock|ma-?lock|ma-?suspend|na-?suspend|ma-?block|na-?block|ma-?delete|ide-?delete|mabubura)\b.{0,40}\b(account|gcash|maya)\b|\b(account|gcash|maya)\b.{0,40}\b(na-?lock|ma-?suspend|na-?suspend|ma-?block|na-?block|ma-?delete|mabubura)\b|\bi-?verify\s+(agad\s+)?(dito|ngayon)\b'
 
-  # ---- the same scams in other languages ------------------------------------------
+  # The same scams in other languages
   # Same weights as the English rules above: a money word alone stays quiet, a pitch
-  # (USDT + commission, earn + contact me) reaches the judge or acts on its own.
+  # (USDT and a commission, or earn and contact me) reaches the judge or acts on its own.
   # Matched against the original letters, so Cyrillic stays Cyrillic. Chinese has no
   # spaces, so its patterns use no word edges. Languages not listed here are covered by
   # foreign_language_risk in code: risk signs in a non-English message go to the AI judge.
 
-  # Russian / Cyrillic
+  # Russian and other Cyrillic
   - id: ru_usdt_pitch
     weight: 4
     pattern: '(usdt|юсдт|тезер\w*|крипт\w*).{0,60}(комисси\w*|держател\w*|партн[её]р\w*|обмен\w*)|(комисси\w*|держател\w*|скупа\w*|покупа\w*).{0,60}(usdt|юсдт|крипт\w*)'
@@ -252,7 +252,7 @@ soft:
     weight: 4
     pattern: '博彩|赌场|百家乐|体育投注|棋牌|约炮|裸聊|色情|成人视频|黄片|外围|楼凤'
 
-  # Indonesian / Malay
+  # Indonesian and Malay
   - id: id_usdt_pitch
     weight: 4
     pattern: '\b(usdt)\b.{0,60}\b(komisi|pemegang|mitra)\b|\b(komisi|pemegang|mitra)\b.{0,60}\busdt\b'
@@ -291,7 +291,7 @@ soft:
     weight: 4
     pattern: '\b(e-?sabong|online\s+sabong|sabong)\b'
 
-  # Spanish / Portuguese
+  # Spanish and Portuguese
   - id: es_pt_money
     weight: 2
     pattern: '\b(comisi[oó]n|comiss[aã]o|ganancias|ganhar\s+dinheiro|ganar\s+dinero|inversi[oó]n|investimento|lucro\s+diario|renda\s+extra)\b'
@@ -311,7 +311,7 @@ soft:
     weight: 3
     pattern: 'تواصل\s+معي|راسلني|للتواصل|واتساب'
 
-# Sender display-name / username fragments that mean impersonation when the
+# Pieces of a sender's display name or username that mean impersonation when the
 # sender is not actually an admin of the group.
 # Matched as whole words (CamelCase split, plural s allowed), so "BadmintonFan" or
 # "Lakers Supporter" are fine while "JohnAdmin" or "crypto_support" are not.
@@ -331,7 +331,7 @@ impersonation:
 protected_names:
   - ZyroGuard
 
-# Display names / bios that block a join outright.
+# Display names and bios that block a join outright.
 # Only links: ordinary words like "crypto" or "support" in a name are not a reason to kick.
 join_name_patterns:
   - 't\.me/'

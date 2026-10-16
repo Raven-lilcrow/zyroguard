@@ -40,7 +40,7 @@ pro cc tv fm gg to ly gl ws su eu asia cash money finance crypto exchange trade 
 zip mov icu buzz rest one world today news email cloud win bid loan men party trade stream download
 """.split())
 
-# Confusable map: the common Cyrillic / Greek lookalikes used to dodge filters.
+# Confusable map: the common Cyrillic and Greek lookalikes that spammers use to dodge filters.
 _CONFUSABLES = str.maketrans({
     "а": "a", "е": "e", "о": "o", "р": "p", "с": "c", "х": "x", "у": "y", "к": "k",
     "і": "i", "ј": "j", "ѕ": "s", "һ": "h", "ԁ": "d", "ɡ": "g", "ո": "n", "ս": "u",
@@ -57,8 +57,8 @@ _SMALL_CAPS = str.maketrans({
 })
 
 
-# Emoji that spell letters: ❌❌❌ for "xxx", regional indicators 🇭🇴🇹 and the
-# boxed letters 🅷🅾🆃 / 🅰 (NFKC leaves all of these alone).
+# Emoji that spell letters: cross marks for "xxx", regional indicator letters and
+# boxed letters (NFKC leaves all of these alone).
 _EMOJI_LETTERS = str.maketrans({
     **{c: "x" for c in "❌✖✕✗✘❎"},
     **{chr(0x1F1E6 + i): chr(ord("a") + i) for i in range(26)},
@@ -80,7 +80,7 @@ _SPACED = re.compile(r"\b(?:\w ){3,}\w\b")
 
 
 def squeeze_spaced(text: str) -> str:
-    """'U S D T holders' -> 'USDT holders': letters spaced out to dodge word filters."""
+    """'U S D T holders' becomes 'USDT holders': letters spaced out to dodge word filters."""
     return _SPACED.sub(lambda m: m.group(0).replace(" ", ""), text)
 
 
@@ -89,7 +89,7 @@ def text_hash(text: str) -> str:
 
 
 def mixed_script(text: str) -> bool:
-    """True when a single word mixes Latin with Cyrillic/Greek letters."""
+    """True when a single word mixes Latin with Cyrillic or Greek letters."""
     for word in re.findall(r"\S+", text):
         has_latin = has_other = False
         for ch in word:
@@ -134,9 +134,9 @@ class HardRule:
     id: str
     desc: str
     regex: Any                        # re.Pattern; custom rules get a regex.Pattern so they can time out
-    action: str | None = None         # None = strike ladder
+    action: str | None = None         # None means the strike ladder
     duration: Duration | None = None
-    source: str = "yaml"              # yaml | chat | global
+    source: str = "yaml"              # where it comes from: yaml, chat or global
     db_id: int | None = None
 
 
@@ -318,7 +318,7 @@ def pattern_problem(pattern: str) -> str | None:
 
 
 def compile_custom(rows: list[Any]) -> list[HardRule]:
-    """Build HardRules from DB rows (chat_id 0 = global)."""
+    """Build HardRules from DB rows (chat_id 0 means global)."""
     out = []
     for r in rows:
         try:
@@ -344,24 +344,24 @@ class MessageView:
     forwarded_from_channel: bool = False
     forwarded: bool = False
     via_bot: bool = False
-    media_type: str | None = None      # photo | video | document | sticker | animation | audio | voice | None
+    media_type: str | None = None      # photo, video, document, sticker, animation, audio, voice or None
     sender_name: str = ""
     sender_username: str | None = None
     sender_is_admin: bool = False
-    is_new_member: bool = True         # joined < restrict window or < N messages
+    is_new_member: bool = True         # joined within the restrict window, or fewer than N messages so far
     is_verified: bool = False
-    account_is_new: bool = False       # first seen < new_account_age
+    account_is_new: bool = False       # first seen less than new_account_age ago
     is_edit: bool = False
     caption_only: bool = False
     repeat_users: int = 0              # distinct users who posted identical text recently
-    flood_hits: int = 0                # messages inside the flood window (incl. this one)
-    extra: str = ""                    # button labels + URLs and the forward source name, scanned like text
-    similar_points: int = 0            # from the meaning match (similar.py): +2/+4 near known spam, -2 near known-good
+    flood_hits: int = 0                # messages inside the flood window, this one included
+    extra: str = ""                    # button labels and URLs and the forward source name, scanned like text
+    similar_points: int = 0            # from the meaning match (similar.py): 2 or 4 near known spam, minus 2 near known-good
 
 
 @dataclass
 class Verdict:
-    kind: str                          # hard | judge | clean
+    kind: str                          # hard, judge or clean
     score: int = 0
     matched: list[str] = field(default_factory=list)
     reason: str = ""
@@ -377,23 +377,23 @@ class Verdict:
 @dataclass
 class Context:
     """Per-group knobs the rules consult."""
-    link_policy: str = "new"           # all | new | allowlist
-    media_unverified: str = "delete"   # allow | delete
+    link_policy: str = "new"           # all, new or allowlist
+    media_unverified: str = "delete"   # allow or delete
     flood_count: int = 5
     repeat_count: int = 3
     allow_domains: set[str] = field(default_factory=set)
     block_domains: set[str] = field(default_factory=set)
     custom_rules: list[HardRule] = field(default_factory=list)
     bot_username: str = ""             # the guard bot itself; mentioning it is fine
-    allowed_languages: set[str] = field(default_factory=set)   # empty = every language allowed
-    language_scope: str = "new"        # new | all: who the allowed-languages rule applies to
+    allowed_languages: set[str] = field(default_factory=set)   # empty means every language is allowed
+    language_scope: str = "new"        # new or all: who the allowed-languages rule applies to
     protected_names: list[str] = field(default_factory=list)   # brand names only admins may use
-    job_rules: bool = True             # fake-job / task-scam rules (rules marked only: jobs / no_jobs)
+    job_rules: bool = True             # fake-job and task-scam rules (rules marked only: jobs or only: no_jobs)
     phishing_rules: bool = True        # account-phishing rules (only: phishing)
     slow_rules: list[HardRule] = field(default_factory=list)   # custom rules that ran out of time; filled by evaluate()
 
 
-RULE_PACKS = {"jobs": "job_rules", "phishing": "phishing_rules"}   # `only:` value -> Context switch
+RULE_PACKS = {"jobs": "job_rules", "phishing": "phishing_rules"}   # the Context switch behind each `only:` value
 
 
 _CAMEL = re.compile(r"(?<=[a-z0-9])(?=[A-Z])")
@@ -406,7 +406,7 @@ def _whole_word(word: str) -> re.Pattern[str]:
 
 
 def impersonation_word(name: str, username: str | None, words: list[str]) -> str | None:
-    """The staff word ('admin', 'support' ...) the name uses as a word of its own, if any.
+    """The staff word (like 'admin' or 'support') the name uses as a word of its own, if any.
     CamelCase is split first, so JohnAdmin and SupportTeam count but BadmintonFan does not."""
     blob = fold(_CAMEL.sub(" ", f"{name} {username or ''}"))
     for word in words:
@@ -432,7 +432,7 @@ def _exact(s: str) -> str:
 
 def brand_in_name(name: str, username: str | None, brands: list[str]) -> tuple[str, bool] | None:
     """(brand, lookalike) when the name uses a protected brand name, else None.
-    lookalike=True means it is spelled with swapped letters (AcmeAl, Acm3AI, Cyrillic А):
+    lookalike=True means it is spelled with swapped letters (AcmeAl, Acm3AI, a Cyrillic A):
     nobody does that by accident. Words are compared whole, alone or joined with their
     neighbours ("Acme Al"), so a longer word that merely contains the brand does not count."""
     found = None
@@ -488,7 +488,7 @@ def evaluate(msg: MessageView, rules: RuleSet, ctx: Context) -> Verdict:
         return Verdict("clean", reason="admin")
     brand = brand_in_name(msg.sender_name, msg.sender_username, ctx.protected_names + rules.protected_names)
 
-    # the button labels/URLs and the "forwarded from" name are part of what members see
+    # the button labels and URLs and the "forwarded from" name are part of what members see
     raw = f"{msg.text}\n{msg.extra}" if msg.extra else msg.text
     folded = fold(raw)
     # original letters, lowercased: the non-English rules need real Cyrillic, which fold() turns into Latin
@@ -506,7 +506,7 @@ def evaluate(msg: MessageView, rules: RuleSet, ctx: Context) -> Verdict:
     if brand and brand[1]:
         return hard(f"name imitates '{brand[0]}' with lookalike letters", "brand_lookalike")
 
-    # -- structural signals -------------------------------------------------
+    # Structural signals
     if msg.has_inline_buttons:
         return hard("inline buttons from a non-admin", "inline_buttons")
     if msg.via_bot and msg.is_new_member:
@@ -518,7 +518,7 @@ def evaluate(msg: MessageView, rules: RuleSet, ctx: Context) -> Verdict:
     if ctx.flood_count > 0 and msg.flood_hits and msg.flood_hits >= ctx.flood_count:
         return hard(f"flooding: {msg.flood_hits} messages in a few seconds", "flood")
 
-    # -- links ------------------------------------------------------------
+    # Links
     domains = extract_domains(raw)
     detail["domains"] = domains
     tg_invite = bool(_TG_INVITE.search(folded))
@@ -543,38 +543,38 @@ def evaluate(msg: MessageView, rules: RuleSet, ctx: Context) -> Verdict:
             if ctx.link_policy == "new" and msg.is_new_member:
                 return hard(f"link from a new member ({domains[0]})", "link_new_member")
 
-    # -- bot mentions -----------------------------------------------------
+    # Bot mentions
     if msg.is_new_member:
         own = f"@{ctx.bot_username}".lower() if ctx.bot_username else None
         if any(h.lower() != own for h in _BOT_MENTION.findall(msg.text)):
             return hard("bot mention by a new member", "bot_mention")
 
-    # -- media ------------------------------------------------------------
+    # Media
     if msg.media_type and msg.is_new_member and ctx.media_unverified == "delete":
         return hard(f"{msg.media_type} from a new member", "media_new_member")
 
-    # -- impersonation ----------------------------------------------------
+    # Impersonation
     word = impersonation_word(msg.sender_name, msg.sender_username, rules.impersonation)
     if word:
         return hard(f"name contains '{word}' but sender is not an admin", "impersonation")
 
-    # -- evasion ----------------------------------------------------------
+    # Evasion
     if _ZERO_WIDTH.search(msg.text) and len(msg.text) > 20:
         matched.append("zero_width")
     if mixed_script(msg.text) and _LATIN_WORD.search(msg.text):
         matched.append("mixed_script")
 
-    # -- custom regex rules (chat + global) --------------------------------
+    # Custom regex rules (per chat and global)
     rule = _custom_hit(ctx, (folded[:CUSTOM_TEXT_CAP], raw[:CUSTOM_TEXT_CAP]))
     if rule:
         return hard(f"custom rule: {rule.desc}", rule.id, rule.action, rule.duration)
 
-    # -- yaml hard rules --------------------------------------------------
+    # YAML hard rules
     for rule in rules.hard:
         if rule.regex.search(folded) or rule.regex.search(plain):
             return hard(rule.desc, rule.id)
 
-    # -- soft scoring -----------------------------------------------------
+    # Soft scoring
     score = 0
     gated: list[tuple[SoftRule, int]] = []
     for rule in rules.soft:
@@ -596,7 +596,7 @@ def evaluate(msg: MessageView, rules: RuleSet, ctx: Context) -> Verdict:
             score += rule.weight * min(hits, 3)
             matched.append(rule.id)
     for rule, hits in gated:
-        # e.g. 'leak' or 'rough' only count as adult words next to adult emoji or an 'open here' link
+        # 'leak' or 'rough', for example, only count as adult words next to adult emoji or an 'open here' link
         if any(n in matched or (n == "forward_channel_soft" and msg.forwarded_from_channel) for n in rule.needs):
             score += rule.weight * min(hits, 3)
             matched.append(rule.id)
@@ -627,7 +627,7 @@ def evaluate(msg: MessageView, rules: RuleSet, ctx: Context) -> Verdict:
         # channel reposts are how adult and scam channels spread; alone this only adds weight
         score += 2
         matched.append("forward_channel_soft")
-    # -- language -----------------------------------------------------------
+    # Language
     lang = detect_language(msg.text)
     detail["language"] = lang
     if lang not in {"en", "unknown"}:

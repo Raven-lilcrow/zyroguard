@@ -1,4 +1,4 @@
-"""Paying users run their own team (/addadmin, /removeadmin, /addmod, /removemod, /showadmin) in their own
+"""Users run their own team (/addadmin, /removeadmin, /addmod, /removemod, /showadmin) in their own
 groups; the remaining owner commands stay with the bot's owners only, even in /help."""
 from datetime import datetime, timezone
 

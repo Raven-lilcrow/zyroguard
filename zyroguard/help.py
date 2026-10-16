@@ -32,7 +32,7 @@ Ban, mute, warn and undo. Everything I do is reported to the admins with an Undo
 
 Tap a feature to see how it works. Have a question? Send /ask and your question."""
 
-# button label -> topic key, laid out in rows
+# button labels and the topic each one opens, laid out in rows
 MENU_ROWS = [
     [("Spam and phishing", "protect"), ("Group cleaning", "cleaning")],
     [("Teaching", "teach"), ("Admin tools", "admin")],
@@ -287,7 +287,7 @@ Admins: /set assistant off turns this off, /set assistant_daily_cap 100 limits i
 
 
 def _codify(text: str) -> str:
-    """Lines that start with a command become <code>command</code> – description, so a tap
+    """Lines that start with a command show the command as <code>command</code> before the description, so a tap
     copies the whole command instead of Telegram highlighting just the /word."""
     out = []
     for line in text.split("\n"):
@@ -335,7 +335,7 @@ TOPICS["durations"] = TOPICS["time"]
 TOPICS["troubleshooting"] = TOPICS["check"]
 TOPICS["modes"] = TOPICS["settings"]
 
-# command -> (what it does, how to use it, example)
+# for each command: (what it does, how to use it, example)
 COMMANDS: dict[str, tuple[str, str, str]] = {
     "ban": ("Bans the user. Without a time it is forever. Timed bans end on their own.",
             "Reply to their message with /ban [time] [reason], or /ban @user [time] [reason]", "/ban @user 7d scam links"),

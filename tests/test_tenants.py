@@ -1,4 +1,4 @@
-"""Multi-tenant: permits, self-service adding, private-chat control, log routing, purge."""
+"""Several users: access, self-service adding, private-chat control, log routing, purge."""
 
 from __future__ import annotations
 
@@ -62,7 +62,7 @@ ANSWERS: list = []
 def _stub_answer(monkeypatch, app):
     ANSWERS.clear()
     monkeypatch.setattr(Message, "answer", _quiet_answer)
-    # the permit holder runs their own groups; the stranger runs nothing
+    # the user with access runs their own groups; the stranger runs nothing
     app.bot.admins[THEIR_GROUP] = [CUSTOMER]
     app.bot.admins[THEIR_GROUP - 1] = [CUSTOMER]
 
@@ -136,7 +136,7 @@ async def test_customer_controls_only_their_group(app):
     assert await app.controls(CUSTOMER, THEIR_GROUP)
     assert not await app.controls(CUSTOMER, CHAT)
     assert await app.controls(ADMIN, THEIR_GROUP)  # bot owner controls everything
-    # private chat: one group -> picked automatically
+    # private chat: with one group, it is picked automatically
     m = dm("/settings", CUSTOMER)
     assert await require_admin(m, app)
     assert cid(m, app) == THEIR_GROUP
@@ -192,7 +192,7 @@ async def test_owner_added_group_survives_restart(app):
     app.allowed_chats.clear()
     await app.load_allowed()          # what startup does
     assert OWNER_GROUP in app.allowed_chats
-    # removed from the group -> forgotten
+    # removed from the group, so forgotten
     await on_my_chat_member(added_event(OWNER_GROUP, ADMIN, status="left"), app)
     assert OWNER_GROUP not in app.allowed_chats
     await app.load_allowed()

@@ -1,4 +1,4 @@
-"""/start and /help: one introduction with the four main features, then feature pages (2026-10-13)."""
+"""/start and /help: one introduction with the four main features, then feature pages."""
 import re
 from datetime import datetime, timezone
 

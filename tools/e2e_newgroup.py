@@ -1,7 +1,7 @@
 """End-to-end check of a brand-new group, through the same dispatcher and routers as main.py.
 
 Telegram is faked (nothing is sent anywhere, the bot token is replaced), the database is a temp file,
-n8n / mod-log / contact webhooks are switched off. On the server it uses the real rules, the real
+and the n8n, mod-log and contact webhooks are switched off. On the server it uses the real rules, the real
 search model and real Claude answers, so it costs a few US cents (about 20 AI calls).
 
 Run on the server in a throwaway copy of the live image (never touches the live database):
@@ -9,7 +9,7 @@ Run on the server in a throwaway copy of the live image (never touches the live 
     -v /tmp/zge2e:/w:ro zyroguard-zyroguard:latest python /w/e2e_newgroup.py
 Locally, without AI or the model (checks the wiring only):
   E2E_LOCAL=1 .venv/Scripts/python tools/e2e_newgroup.py
-Prints PASS / FAIL lines for the fixed expectations, and the AI answers for a human to read.
+Prints a PASS or FAIL line for each fixed expectation, and the AI answers for a human to read.
 """
 from __future__ import annotations
 
@@ -72,7 +72,7 @@ def now() -> int:
     return int(datetime.now(timezone.utc).timestamp())
 
 
-# ---- fake Telegram ----------------------------------------------------------------------------------
+# Fake Telegram
 
 ADMIN_RIGHTS = {"can_be_edited": False, "is_anonymous": False, "can_manage_chat": True, "can_delete_messages": True,
                 "can_manage_video_chats": True, "can_restrict_members": True, "can_promote_members": False,
@@ -136,7 +136,7 @@ class FakeTelegram(BaseSession):
         pass
 
 
-# ---- results ----------------------------------------------------------------------------------------
+# Results
 
 passed: list[str] = []
 failed: list[str] = []

@@ -36,7 +36,7 @@ GROUPS = {ChatType.GROUP, ChatType.SUPERGROUP}
 COOLDOWN_S = 8
 MAX_QUESTION = 2000
 MAX_ANSWER_CHARS = 3800
-HISTORY_TURNS = 4          # exchanges (question + answer) remembered per person per chat
+HISTORY_TURNS = 4          # exchanges (a question and its answer) remembered per person per chat
 HISTORY_IDLE_S = 30 * 60   # forgotten after this much quiet
 HISTORY_CHARS = 1200       # each remembered message is cut to this
 
@@ -110,7 +110,7 @@ _TICK = re.compile(r"`([^`\n]+)`")
 
 
 def to_html(text: str) -> str:
-    """Model output -> Telegram HTML: escape everything, turn `cmd` into <code>cmd</code>
+    """Model output as Telegram HTML: escape everything, turn `cmd` into <code>cmd</code>
     so a tap copies the whole command, and drop stray em dashes."""
     text = text.replace(" — ", ": ").replace("—", "-")
     out, pos = [], 0
@@ -169,7 +169,7 @@ class Assistant:
         self.system = build_system_prompt()
         self.owner_system = build_system_prompt(owner=True)
         self._last: dict[tuple[int, int], Any] = {}
-        # (chat_id, user_id) -> {"ts": datetime, "msgs": [{"role","content"}, ...]}
+        # per (chat_id, user_id): {"ts": datetime, "msgs": [{"role", "content"}]}
         self._history: dict[tuple[int, int], dict[str, Any]] = {}
 
     @property
@@ -192,7 +192,7 @@ class Assistant:
             if (now - h["ts"]).total_seconds() > HISTORY_IDLE_S:
                 self._history.pop(k, None)
 
-    # ---- short memory, only for questions ------------------------------------
+    # Short memory, only for questions
 
     def history(self, chat_id: int, user_id: int) -> list[dict[str, str]]:
         entry = self._history.get((chat_id, user_id))
@@ -211,7 +211,7 @@ class Assistant:
         entry["ts"] = utcnow()
 
     def clear(self, chat_id: int, user_id: int | None = None) -> int:
-        """Forget remembered questions. user_id None = everyone in that chat. Returns sessions dropped."""
+        """Forget remembered questions. user_id None means everyone in that chat. Returns how many were dropped."""
         keys = [k for k in self._history if k[0] == chat_id and (user_id is None or k[1] == user_id)]
         for k in keys:
             self._history.pop(k, None)
@@ -254,7 +254,7 @@ class Assistant:
     async def ask(self, chat_id: int, question: str, *, asker: str, user_id: int = 0, context: str | None = None,
                   daily_cap: int | None = None, owner: bool = False) -> tuple[str | None, str | None]:
         """Returns (answer, problem). Exactly one of them is set.
-        owner = a bot owner asking in a private chat: the guide then includes the owner commands."""
+        owner: a bot owner asking in a private chat, so the guide includes the owner commands."""
         if not self.client:
             return None, "no_key"
         if await self._cap_reached(chat_id, daily_cap):
@@ -273,9 +273,9 @@ class Assistant:
                           user_id: int = 0, daily_cap: int | None = None, whole: bool = False,
                           instructions: str = "") -> tuple[str | None, str | None]:
         """Support mode: answer only from the group's own file excerpts (kb.Excerpt). The short memory
-        keeps just the question and the answer. whole = these are all of the group's files: they then
+        keeps just the question and the answer. whole: these are all of the group's files, so they
         go into the cached system prompt, so more questions within minutes cost a tenth.
-        instructions = the group admins' own instructions (/zyromod step 4), part of the cached prefix."""
+        instructions: the group admins' own instructions (/zyromod step 4), part of the cached prefix."""
         if not self.client:
             return None, "no_key"
         if await self._cap_reached(chat_id, daily_cap):
@@ -303,7 +303,7 @@ class Assistant:
         return text, problem
 
 
-# ---- triggers -------------------------------------------------------------------
+# Triggers
 
 _MENTIONED_COMMAND = re.compile(r"^@(\w+)\s+(?=/[A-Za-z0-9_]+(?:@\w+)?(?:\s|$))")
 
@@ -387,7 +387,7 @@ PRIVATE_DAILY_CAP = 30   # questions per person per day in a private chat (owner
 
 
 async def _private_role(app: App, user_id: int) -> str | None:
-    """'staff' for owners, permit holders and group admins, 'member' for people who have
+    """'staff' for owners, users who added the bot and group admins, 'member' for people who have
     actually taken part in a guarded group, None for everyone else."""
     if app.config.is_owner(user_id):
         return "staff"

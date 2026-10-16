@@ -1,7 +1,7 @@
 """Contact the admin: a button anyone can tap to send the bot owner a message.
 
-Flow: "Contact the admin" button (deep link t.me/<bot>?start=contact, or /contact
-in a private chat) -> the bot asks for the message -> the next text the person
+Flow: the person taps "Contact the admin" (deep link t.me/<bot>?start=contact, or /contact
+in a private chat), the bot asks for the message, and the next text the person
 sends is delivered to every owner as a Telegram message and, when an n8n
 webhook is configured, emailed to CONTACT_EMAIL. One message per person per
 10 minutes, 2000 characters max. Nothing else about the person is stored.
@@ -29,7 +29,7 @@ PENDING_TTL_S = 10 * 60
 COOLDOWN_S = 10 * 60
 MAX_CHARS = 2000
 
-_pending: dict[int, datetime] = {}   # user_id -> when they tapped the button
+_pending: dict[int, datetime] = {}   # when each user_id tapped the button
 _last_sent: dict[int, datetime] = {}
 
 

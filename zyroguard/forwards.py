@@ -108,7 +108,7 @@ async def fail(app: App, chat_id: int, user_id: int, reason: str) -> None:
                     member["display_name"] if member else None, ids[0] if ids else None,
                     f"[{len(ids)} forwarded message{'s' if len(ids) != 1 else ''}]", None,
                     chat["title"] if chat else None, row["thread_id"])
-    # a strike on a delete: the ladder decides (default 1st = mute 1 day, then ban 30 days, then ban)
+    # a strike on a delete: the ladder decides (by default a 1-day mute first, then a 30-day ban, then a permanent ban)
     await app.enforcer.apply(target, Decision("forward", reason, "delete", None, delete_message=bool(ids),
                                               add_strike=True), cs)
 

@@ -55,11 +55,16 @@ def _refusal(why: str) -> str:
     return why
 
 
-async def _leave(app: App, chat, why: str) -> None:
+ANONYMOUS_HINT = ("I can't see who added me, because they post as an anonymous admin here, so I am leaving.\n"
+                  "To add me: open the group's settings, Administrators, tap yourself, turn off Remain anonymous, "
+                  "save, and add me again. You can turn it back on afterwards.\n")
+
+
+async def _leave(app: App, chat, why: str, text: str | None = None) -> None:
     log.warning("added to %s (%s) by someone without a permit (%s), leaving", chat.title, chat.id, why)
     try:
         from .contact import contact_button, contact_line
-        await app.bot.send_message(chat.id, "This bot only guards groups of people with a permit, so I am leaving.\n"
+        await app.bot.send_message(chat.id, (text or "This bot only guards groups of people with a permit, so I am leaving.\n")
                                    + contact_line(app), reply_markup=contact_button(app))
     except Exception:  # noqa: BLE001
         pass
@@ -70,7 +75,7 @@ async def _leave(app: App, chat, why: str) -> None:
 
 
 async def _welcome_owner(app: App, owner_id: int, chat, rights_ok: bool) -> None:
-    """Private-chat onboarding for the permit holder who just added the bot."""
+    """Private-chat onboarding for the user who just added the bot."""
     title = chat.title or str(chat.id)
     lines = [f"🛡 <b>{html.escape(title)}</b>",
              "<b>I am guarding this group now.</b>" if rights_ok else
@@ -125,24 +130,38 @@ async def on_my_chat_member(event: ChatMemberUpdated, app: App) -> None:
         log.info("removed from %s (%s)", chat.title, chat.id)
         return
     adder = event.from_user
+    # An anonymous admin shows up as Telegram's placeholder account, so who added me is hidden. When one of
+    # the owners is an admin of that group, it counts as the owner's add; any other anonymous add is refused.
+    anonymous = bool(adder and adder.id in commands.SERVICE_ACCOUNTS)
+    if anonymous:
+        app.admins.invalidate(chat.id)
+        admins = await app.admins.admins(chat.id, force=True)
+        owner_admin = next((admins[i] for i in app.config.owner_ids if i in admins), None)
+        if owner_admin is not None:
+            adder = owner_admin.user
     known = await app.store.get_chat(chat.id)
     registered_owner = int(known["owner_user_id"]) if known and known["owner_user_id"] else None
     owner_id: int | None = None
-    if chat.id in app.allowed_chats:
-        owner_id = registered_owner          # already ours: a rights change, not a new add
+    if chat.id in app.allowed_chats or chat.id in app.config.allowed_chat_ids:
+        owner_id = registered_owner          # already ours (or on the static list, even after a removal)
         if owner_id is not None and not (await app.store.permit_valid_for_existing(owner_id)):
             await ledger.note(app, "bot_left", chat.id, target=owner_id, title=chat.title)
             await _leave(app, chat, "owner's permit ended")
             return
     elif adder and app.config.is_owner(adder.id):
         owner_id = None                      # bot owner added it: behaves like the static list
+    elif anonymous:
+        await ledger.note(app, "bot_refused", chat.id, title=chat.title,
+                          reason="Added by an anonymous admin (who it was is hidden, and no owner is an admin there)")
+        await _leave(app, chat, "anonymous admin, no owner among the admins", ANONYMOUS_HINT)
+        return
     elif adder:
         ok, why = await app.store.permit_valid(adder.id)
         if not ok:
             await ledger.note(app, "bot_refused", chat.id, actor=adder, title=chat.title, reason=_refusal(why))
             await _leave(app, chat, f"{adder.id}: {why}")
             return
-        # a permit holder may only register groups they actually run
+        # a user with access may only register groups they actually run
         app.admins.invalidate(chat.id)
         if adder.id not in await app.admins.admins(chat.id, force=True):
             try:
@@ -176,7 +195,7 @@ async def on_my_chat_member(event: ChatMemberUpdated, app: App) -> None:
         elif chat.id in app.config.allowed_chat_ids:
             how = "Allowlist"
         else:
-            how = "You"
+            how = "You (as an anonymous admin)" if anonymous else "You"
         await ledger.note(app, "bot_added", chat.id, actor=adder, title=chat.title, how=how,
                           rights_ok=not missing, missing=missing, old_status=_status(old), new_status=_status(new),
                           mode=(await app.settings.get(chat.id)).raw("mode"))

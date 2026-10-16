@@ -48,7 +48,7 @@ def test_dangerous_patterns_are_refused():
     assert pattern_problem("x" * 201)
     assert pattern_problem(".*a.*b.*c")
     assert pattern_problem("(unclosed")
-    # repeats side by side that match the same characters (audit 2026-10-15, F-01)
+    # repeats side by side that match the same characters
     assert pattern_problem(r"\s*\s*\s*\s*\s*x")
     assert pattern_problem(r"[a-z]+[a-z]+[a-z]+[a-z]+\d")
     assert pattern_problem(r"\w*\w*\w*\w*!")
@@ -60,7 +60,7 @@ def test_dangerous_patterns_are_refused():
         assert pattern_problem(ok) is None, ok
 
 
-SLOW = r"[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+\d"   # refused today, but a rule saved before the fix could look like this
+SLOW = r"[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+[a-z]+\d"   # refused when added, but an older saved rule could look like this
 
 
 def test_a_slow_custom_rule_cannot_hold_up_evaluate():
@@ -76,7 +76,7 @@ def test_a_slow_custom_rule_cannot_hold_up_evaluate():
     start = time.monotonic()
     v = evaluate(view, rules, ctx)
     took = time.monotonic() - start
-    assert took < CUSTOM_BUDGET_S + 0.5, took                    # was 13.7 s for one such rule on 100 characters
+    assert took < CUSTOM_BUDGET_S + 0.5, took                    # without the limit, one such rule took 13.7 s on 100 characters
     assert not v.matched or not v.matched[0].startswith("custom_")
     assert ctx.slow_rules and all(r.regex.pattern == SLOW for r in ctx.slow_rules)
 

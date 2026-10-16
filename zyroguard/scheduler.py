@@ -17,8 +17,8 @@ MANILA = ZoneInfo("Asia/Manila")
 
 
 async def _lift_state(app: App, chat_id: int, user_id: int, action: str, expires_at) -> str:
-    """'ours' = our restriction is still on, lift it. 'ended' = Telegram already lifted it on
-    time (it does that for timed mutes and bans), so only report it. 'changed' = an admin
+    """'ours': our restriction is still on, lift it. 'ended': Telegram already lifted it on
+    time (it does that for timed mutes and bans), so only report it. 'changed': an admin
     has since banned or muted the person for good or for a different time: leave it alone."""
     try:
         member = await app.bot.get_chat_member(chat_id, user_id)
@@ -213,7 +213,7 @@ async def send_digests(app: App, sent_today: set[tuple[int, str]]) -> None:
 
 
 async def drop_ended_permits(app: App) -> int:
-    """Leave the groups of customers whose permit was revoked or ran out. Records stay
+    """Leave the groups of users whose access was revoked or ran out. Records stay
     until the owner runs /purge, so a renewal does not start from zero. Runs every 5 minutes;
     app.chat_allowed already stops serving such a group the moment its access ends."""
     from . import ledger
@@ -248,7 +248,7 @@ async def drop_ended_permits(app: App) -> int:
             pass
         left += 1
         log.info("left %s (%s): permit of %s ended", chat["title"], chat_id, owner)
-    # one "access expired" record (and owner alert) per ended permit, groups or not
+    # one "access expired" record (and owner alert) each time someone's access ends, groups or not
     for p in await app.store.list_permits():
         if not p["active"] or not p["expires_at"] or (from_iso(p["expires_at"]) or utcnow()) > utcnow():
             continue

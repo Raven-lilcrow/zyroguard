@@ -1,6 +1,5 @@
-"""Adult-channel forwards: the 2026-09-30 message that got through ("H O T ❌❌❌ / ROUGH /
-FIRST TIME / BACKSTAGE / SPA / HOMEMADE", forwarded from "Leak 🔞" with an OPEN HERE button,
-sent by a member who joined before the bot)."""
+"""Adult-channel forwards: a word menu spelled with emoji letters, forwarded from an adult channel with an
+OPEN HERE button, sent by a member who joined before the bot."""
 from datetime import datetime, timezone
 from pathlib import Path
 

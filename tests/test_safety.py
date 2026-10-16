@@ -35,7 +35,7 @@ async def test_text_hit_is_removed_and_muted(app, monkeypatch):  # noqa: F811
     removed = await check(app, msg("kys loser"))
     assert removed
     names = app.bot.names()
-    assert "delete_message" in names and "restrict_chat_member" in names  # deleted + mute 1d
+    assert "delete_message" in names and "restrict_chat_member" in names  # deleted, and a 1-day mute
     row = (await app.store.recent_audit(CHAT, 1))[0]
     assert row.source == "safety" and row.action == "mute" and row.duration_s == 86400
     assert row.detail["safety"]["category"] == "harassment"
@@ -102,5 +102,5 @@ async def test_scam_on_image_uses_spam_ladder(app, monkeypatch):  # noqa: F811
     m = msg("", photo=[{"file_id": "f", "file_unique_id": "u", "width": 1, "height": 1}])
     assert await check(app, m)
     row = (await app.store.recent_audit(CHAT, 1))[0]
-    assert row.source == "judge" and row.action == "mute" and row.duration_s == 86400  # strike 1 = mute 24h
+    assert row.source == "judge" and row.action == "mute" and row.duration_s == 86400  # strike 1 is a 24h mute
     assert await app.store.active_strikes(CHAT, 555) == 1

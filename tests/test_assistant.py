@@ -30,7 +30,7 @@ class FakeClient:
 def test_system_prompt_contains_guide_without_html():
     p = build_system_prompt()
     assert "can't check that from here" in p
-    # can't answer -> ask what they mean, never guess (2026-10-13, after a pip/npm guess about an app it did not know)
+    # when it can't answer, it asks what they mean and never guesses (for example install commands for an app it does not know)
     assert "never guess" in p and "ask one short question" in p and "in case you meant" in p
     assert "give what general knowledge you can" not in p
     assert "/setstrike 1 mute 24h" in p
@@ -116,7 +116,7 @@ async def test_history_is_used_and_cleared():
     assert a.clear(-1, 5) == 1
     await a.ask(-1, "third?", asker="@u", user_id=5)
     assert len(client.messages.calls[3]["messages"]) == 1
-    assert a.clear(-1) == 2  # u again + v
+    assert a.clear(-1) == 2  # u again, and v
     assert a.history(-1, 5) == []
     await store.close()
 

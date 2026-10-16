@@ -1,5 +1,5 @@
-"""Account phishing (2026-10-13): fake 'your account will be deleted' notices, fake support, and
-requests for login codes / OTP / two-step passwords. Phishing-only hits always go to the AI judge."""
+"""Account phishing: fake 'your account will be deleted' notices, fake support, and
+requests for login codes, OTPs or two-step passwords. Phishing-only hits always go to the AI judge."""
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -61,7 +61,7 @@ NORMAL = [
     "how long does an appeal take on Facebook after a page is disabled?",
     "the official site is telegram.org and help is at support.google.com",
 ]
-META = PHISHING[6]          # rules alone would act (score >= 10): must still go to the judge
+META = PHISHING[6]          # rules alone would act (a score of 10 or more): it must still go to the judge
 PHISH_IDS = {r.id for r in RULES.soft if r.only == "phishing"}
 
 
@@ -138,7 +138,7 @@ async def test_phishing_rules_off_keeps_the_old_behaviour(app, monkeypatch):  # 
     seen = {}
     await _regular(app)
     await _judge(app, monkeypatch, True, "phishing", 0.97, seen)
-    await process(app, msg(PHISHING[2]))                        # code request: clean without the new rules
+    await process(app, msg(PHISHING[2]))                        # code request: clean without the phishing rules
     assert not seen and "delete_message" not in app.bot.names()
 
 

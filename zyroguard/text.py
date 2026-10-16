@@ -1,6 +1,6 @@
 """Plain-language wording shared by every reply the bot sends.
 
-One place for "mute 24h" -> "mute for 24h" / "Muted for 24h" so commands, the
+One place that turns "mute 24h" into "mute for 24h" or "Muted for 24h", so commands, the
 log group, /diag and /help all read the same way.
 """
 
@@ -44,12 +44,12 @@ SOURCE_WORDS = {
 
 
 def duration_words(seconds: int | None) -> str:
-    """None -> 'for good', 86400 -> 'for 1 day'."""
+    """None becomes 'for good', 86400 becomes 'for 1 day'."""
     return "for good" if seconds is None else f"for {long_duration(format_duration(seconds))}"
 
 
 def long_duration(raw: str) -> str:
-    """Compact '2m' / '24h' / '1d12h' -> '2 minutes' / '24 hours' / '1 day 12 hours'."""
+    """Compact '2m', '24h' or '1d12h' spelled out: '2 minutes', '24 hours', '1 day 12 hours'."""
     from .durations import try_parse_duration
     d = try_parse_duration(raw)
     if d is None:
@@ -66,7 +66,7 @@ def long_duration(raw: str) -> str:
 
 
 def action_words(raw: str, long: bool = False) -> str:
-    """Setting text as typed ('mute 24h', 'ban', 'kick') -> 'mute for 24h', 'ban for good', 'kick out'.
+    """Setting text as typed ('mute 24h', 'ban', 'kick') in words: 'mute for 24h', 'ban for good', 'kick out'.
 
     long=True spells the time out: 'mute for 24 hours'."""
     kind, _, dur = raw.strip().partition(" ")
@@ -79,7 +79,7 @@ def action_words(raw: str, long: bool = False) -> str:
 
 
 def action_past_long(raw: str) -> str:
-    """'mute 24h' -> 'muted for 24 hours', 'ban' -> 'banned for good', 'kick' -> 'kicked out'."""
+    """'mute 24h' becomes 'muted for 24 hours', 'ban' becomes 'banned for good', 'kick' becomes 'kicked out'."""
     kind, _, dur = raw.strip().partition(" ")
     kind = kind.lower()
     past = {"mute": "muted", "ban": "banned", "kick": "kicked out", "delete": "message deleted only",

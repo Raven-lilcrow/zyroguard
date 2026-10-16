@@ -1,4 +1,4 @@
-"""Join gate: CAS check, name/bio scan, button / math / emoji captcha, timeouts."""
+"""Join gate: the CAS check, the name and bio scan, the button, math and emoji captchas, and timeouts."""
 
 from __future__ import annotations
 

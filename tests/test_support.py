@@ -1,4 +1,4 @@
-"""Support mode (kb.py + support.py): reading files, cutting and searching them, answering only from
+"""Support mode (kb.py and support.py): reading files, cutting and searching them, answering only from
 them, the can't-answer message, the /ask pointer, and who may change the contacts.
 Uses the word-overlap stand-in embedder, so nothing is downloaded."""
 import io
@@ -64,7 +64,7 @@ def make_pdf(pages: list[str]) -> bytes:
     return bytes(out)
 
 
-# ---- reading and cutting -------------------------------------------------------------
+# Reading and cutting
 
 def test_markdown_sections_keep_the_heading_trail():
     parts = kb.sections(kb.tidy(FAQ), "md")
@@ -252,7 +252,7 @@ def test_plain_text_bullets_are_marked():
     assert parts == [("Delivery", "• Metro Manila: 1-2 days\n• Provinces: 3-5 days")]
 
 
-# ---- the library ------------------------------------------------------------------------------
+# The library
 
 @pytest.fixture
 async def base(app):  # noqa: F811
@@ -313,7 +313,7 @@ async def test_excerpts_large_base_takes_best_and_neighbours(app, base, monkeypa
     assert "Singapore" in joined and len(joined) < 900
 
 
-# ---- what members see -----------------------------------------------------------------------
+# What members see
 
 class FakeMessages:
     def __init__(self, text):
@@ -471,7 +471,7 @@ async def test_menu_is_plain_and_asks_to_resend_old_files(app, base):  # noqa: F
     assert not any(ch in text for ch in "·→›«") and "sections" not in text
     labels = [b.text for row in markup.inline_keyboard for b in row]
     assert {"Add files", "Set email", "Contact button", "Turn on", "/ask reminders: On"} <= set(labels)
-    await app.store.db.execute("UPDATE kb_documents SET reader=1")   # a file read before the 2026-10-13 reader
+    await app.store.db.execute("UPDATE kb_documents SET reader=1")   # a file read by the first reader
     await app.store.db.commit()
     text, _ = await support.dashboard(app, CHAT)
     assert "• faq.md (1 KB), send it again" in text and "for cleaner answers" in text
@@ -487,7 +487,7 @@ def test_question_detection_and_hint():
                     "<code>/ask how much is the pro plan? see</code>")
 
 
-# ---- who may change what -------------------------------------------------------------------
+# Who may change what
 
 def _admin(uid, promote):
     return ChatMemberAdministrator(
@@ -550,7 +550,7 @@ def test_email_and_link_validation():
             validate(key, value)
 
 
-# ---- the /ask pointer in the group ------------------------------------------------------------
+# The /ask pointer in the group
 
 async def test_pointer_to_ask_once_per_person(app, base, monkeypatch):  # noqa: F811
     await _ready(app, base)
@@ -635,7 +635,7 @@ async def test_purge_removes_support_rows(app, base):  # noqa: F811
 
 
 async def test_a_vague_question_gets_a_clarifying_question_about_the_files_only(app, base):  # noqa: F811
-    # 2026-10-13: support mode keeps its questions, not just its answers, inside the files
+    # support mode keeps its questions, not just its answers, inside the files
     cs = await _ready(app, base)
     calls = _assistant(app, "Do you mean the Pro plan price or cancelling your subscription?")
     r = await support.resolve(app, CHAT, 5, "@u", "how much is the plan and how do I stop it?", cs, "Acme")
@@ -651,7 +651,7 @@ def test_learning_features_ship_switched_off():
     assert SPECS["support"].default == "off"
 
 
-# ---- the group's own instructions (/zyromod step 4) ----------------------------------------------
+# The group's own instructions (/zyromod step 4)
 
 RULES = ("Tone: friendly, simple words.\nDo: end answers with our guide https://docs.acme.io/guide\n"
          "Don't: mention competitors.")

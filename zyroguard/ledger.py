@@ -33,7 +33,7 @@ log = logging.getLogger("zyroguard.ledger")
 
 MANILA = ZoneInfo("Asia/Manila")
 
-# kind -> (category, label, alert the owner on Telegram)
+# for each event kind: (category, label, alert the owner on Telegram)
 KINDS: dict[str, tuple[str, str, bool]] = {
     "bot_added": ("Access", "Bot added", True),
     "bot_refused": ("Access", "Refused", True),
@@ -80,7 +80,7 @@ GROUP_COLS = ["Group", "Group ID", "Status", "Bot working", "Mode", "ZyroMod", "
 ACCESS_COLS = ["Person", "Username", "Telegram ID", "Status", "Groups used", "Their groups", "AI calls 24h",
                "Daily AI cap", "Given on", "Given by", "Ends", "Days left", "Note", "Last checked"]
 
-# colours for the Category/Event column of a new month tab: (starts with, background, text)
+# colours for the Category and Event columns of a new month tab: (starts with, background, text)
 _COLORS = {"green": ("E6F4EA", "137333"), "amber": ("FEF7E0", "B06000"), "red": ("FCE8E6", "C5221F"),
            "gray": ("F1F3F4", "5F6368"), "blue": ("E8F0FE", "1967D2")}
 EVENT_COLORS = [("Bot added", "green"), ("Access given", "green"), ("Access changed", "green"),
@@ -108,7 +108,7 @@ STATUS = Status()
 _session: aiohttp.ClientSession | None = None
 
 
-# ---- recording ---------------------------------------------------------------
+# Recording
 
 def _person(user: Any) -> tuple[int | None, str | None]:
     """(id, 'Full Name (@username)') from an aiogram User, or (id, None) from a plain id."""
@@ -191,7 +191,7 @@ async def _alert(app: App, kind: str, chat_id: int | None, actor_id: int | None,
             log.warning("owner alert to %s failed: %s", owner, e)
 
 
-# ---- names, titles and formatting ------------------------------------------------
+# Names, titles and formatting
 
 async def _title(app: App, chat_id: int | None) -> str | None:
     if chat_id is None:
@@ -351,14 +351,14 @@ async def event_row(app: App, r: Any) -> list[str]:
             {"shadow": "Report-only", "enforce": "Enforce"}.get(mode, mode), f"#{ref}" if ref else ""]
 
 
-# ---- Google Sheets calls for the webhook -------------------------------------------
+# Google Sheets calls for the webhook
 
 def _range(tab: str, cell: str = "A1") -> str:
     return quote(f"'{tab}'!{cell}", safe="")
 
 
 def _sheet_id(tab: str) -> int:
-    """Stable id for a month tab ("Oct 2026" -> 202610) so one request can create and format it."""
+    """Stable id for a month tab ("Oct 2026" is 202610) so one request can create and format it."""
     try:
         return int(datetime.strptime(tab, "%b %Y").strftime("%Y%m"))
     except ValueError:
@@ -447,7 +447,7 @@ async def close() -> None:
     _session = None
 
 
-# ---- sending events ------------------------------------------------------------
+# Sending events
 
 async def flush(app: App, limit: int = 300) -> int:
     """Send unsent events, oldest first, grouped by month tab. Returns how many were sent."""
@@ -487,7 +487,7 @@ async def flush(app: App, limit: int = 300) -> int:
     return len(ids) if ok else 0
 
 
-# ---- the state right now: Groups and Access ------------------------------------------
+# The state right now: Groups and Access
 
 def _days_left(ends: datetime | None) -> str:
     if not ends:
@@ -623,7 +623,7 @@ def snapshot_block(d: dict[str, Any]) -> list[list[str]]:
             *groups, [""], *access]
 
 
-# ---- daily summary and month end ----------------------------------------------------
+# Daily summary and month end
 
 _SOURCE = {"rule": "rules", "judge": "AI judge", "flood": "flood", "captcha": "captcha", "cas": "known spammer list",
            "join": "join checks", "safety": "safety check", "similar": "meaning match", "forward": "forwards"}
@@ -720,7 +720,7 @@ async def month_end(app: App, now: datetime | None = None) -> bool:
 
 
 async def start(app: App) -> None:
-    """First run: remember when the record started and which permits had already ended,
+    """First run: remember when the record started and whose access had already ended,
     so nothing from before shows up again as new."""
     if await app.store.ledger_get("started") is None:
         await app.store.ledger_set("started", utcnow().isoformat())

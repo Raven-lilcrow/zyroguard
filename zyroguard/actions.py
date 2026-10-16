@@ -1,4 +1,4 @@
-"""Carrying out decisions: delete / warn / kick / mute / ban, strike ladder,
+"""Carrying out decisions: delete, warn, kick, mute or ban, the strike ladder,
 timed lifts, audit rows, mod-log messages and the n8n event.
 
 Every path goes through ``Enforcer.apply`` so shadow mode, audit and the
@@ -76,12 +76,12 @@ async def tg_call(coro_factory, *, retries: int = 3):
 @dataclass
 class Decision:
     """What should happen to one user/message."""
-    source: str                     # rule | judge | flood | captcha | cas | admin | join
+    source: str                     # who decided: rule, judge, flood, captcha, cas, admin or join
     reason: str
-    action: str                     # delete | warn | kick | mute | ban | none | flag
+    action: str                     # delete, warn, kick, mute, ban, none or flag
     duration: Duration | None = None
     delete_message: bool = True
-    add_strike: bool = True         # delete/warn from rules add a strike; admin actions do not
+    add_strike: bool = True         # a delete or warn from the rules adds a strike; admin actions do not
     detail: dict[str, Any] = field(default_factory=dict)
 
 
@@ -132,7 +132,7 @@ class Enforcer:
         self._session: aiohttp.ClientSession | None = None
         self.last_n8n_error: str | None = None
         self._locks: dict[tuple[int, int], asyncio.Lock] = {}
-        # set by the app: tells whether a user is an admin/owner/allowlisted in a chat.
+        # set by the app: tells whether a user is an admin, an owner or allowlisted in a chat.
         # Automatic actions on such users are dropped even if a stale cache let them through.
         self.exempt = None
 
@@ -140,7 +140,7 @@ class Enforcer:
         if self._session:
             await self._session.close()
 
-    # ---- primitives -------------------------------------------------------
+    # Primitives
 
     async def delete(self, chat_id: int, message_id: int) -> str | None:
         try:
@@ -199,7 +199,7 @@ class Enforcer:
         await asyncio.sleep(0.3)
         return await self.unban(chat_id, user_id)
 
-    # ---- the one entry point ----------------------------------------------
+    # The one entry point
 
     async def apply(self, target: Target, decision: Decision, cs: ChatSettings, *,
                     actor_id: int | None = None, force_enforce: bool = False) -> Outcome:
@@ -259,7 +259,7 @@ class Enforcer:
         added_strike = False
         burst = False
 
-        # strike ladder: delete/warn from detection escalate by strike count
+        # strike ladder: a delete or warn from detection escalates by strike count
         if decision.add_strike and target.user_id and action in {"delete", "warn"}:
             ttl_s = cs.seconds("strike_ttl")
             counts = enforce or decision.source == "admin"   # shadow mode never records strikes
@@ -347,7 +347,7 @@ class Enforcer:
         return (f"🛡 <b>{what}</b>: {html.escape(who)}. Reason: {html.escape(decision.reason)}.\n"
                 f"Admins can undo this with <code>/undo {outcome.audit_id}</code>.")
 
-    # ---- undo ---------------------------------------------------------------
+    # Undo
 
     async def undo(self, audit_id: int, by: int | None) -> str:
         row = await self.store.get_audit(audit_id)
@@ -374,11 +374,11 @@ class Enforcer:
             return f"Marked action {audit_id} as undone. It was shadow mode, so nothing had really happened."
         return f"Undone action {audit_id}. " + (" ".join(msgs) if msgs else "The strike was removed.")
 
-    # ---- reporting ----------------------------------------------------------
+    # Reporting
 
     async def _modlog_target(self, cs: ChatSettings) -> int | None:
         """Where reports go: the group's own log chat if set, else the private chat of the
-        permit holder who added the bot, else the server-wide log group (owner's groups)."""
+        user who added the bot, else the server-wide log group (for the owner's groups)."""
         if cs.modlog_chat_id:
             return cs.modlog_chat_id
         owner = await self.store.chat_owner(cs.chat_id)
@@ -452,7 +452,7 @@ class Enforcer:
         })
 
     async def notify(self, cs: ChatSettings, text: str) -> None:
-        """Plain informational line to the mod log (auto-unban, judge failure...)."""
+        """Plain informational line to the mod log (an automatic unban, a judge failure)."""
         modlog = await self._modlog_target(cs)
         if not modlog:
             return

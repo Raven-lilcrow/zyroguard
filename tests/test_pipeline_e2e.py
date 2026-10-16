@@ -1,4 +1,4 @@
-"""Drives the real pipeline + enforcer + store against a fake Telegram bot."""
+"""Drives the real pipeline, enforcer and store against a fake Telegram bot."""
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -31,7 +31,7 @@ class FakeBot:
         self.id = BOT
         self.calls: list[tuple[str, tuple, dict]] = []
         self._msg_id = 1000
-        self.admins: dict[int, list[int]] = {}   # chat_id -> extra admin ids (ADMIN is admin everywhere)
+        self.admins: dict[int, list[int]] = {}   # extra admin ids per chat_id (ADMIN is an admin everywhere)
 
     def __getattr__(self, name):
         async def call(*a, **kw):
@@ -225,7 +225,7 @@ async def test_join_with_scam_name_is_actioned(app):
     user = User(id=701, is_bot=False, first_name="Binance Support t.me/claim", username="supp")
     await handle_join(app, CHAT, "Test group", user, cs)
     names = app.bot.names()
-    assert "ban_chat_member" in names  # captcha_fail default kick = ban+unban
+    assert "ban_chat_member" in names  # the default captcha_fail kick is a ban and an unban
     assert await app.store.captcha_get(CHAT, 701) is None
 
 
@@ -272,7 +272,7 @@ async def test_captcha_every_join_repeats_for_verified_user(app):
 
 
 async def test_photo_from_new_member_is_only_deleted(app):
-    await app.store.touch_member(CHAT, 610, "newbie", "New", joined=True)  # joined just now = new account too
+    await app.store.touch_member(CHAT, 610, "newbie", "New", joined=True)  # joined just now, so a new account too
     await app.settings.set(CHAT, "media_unverified", "delete", ADMIN)  # the strict house rule, off by default
     await process(app, msg("", user_id=610, photo=[{"file_id": "f", "file_unique_id": "u", "width": 1, "height": 1}]))
     names = app.bot.names()

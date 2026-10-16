@@ -1,7 +1,7 @@
 """SQLite persistence. This is the only module that touches the database.
 
 Every table is keyed by chat_id so the bot serves many groups from one file.
-Swap the engine here (Postgres later) and nothing else changes.
+Swapping the engine here (for Postgres, say) changes nothing else.
 """
 
 from __future__ import annotations
@@ -368,23 +368,23 @@ class Store:
         cols = {r[1] for r in await cur.fetchall()}
         if "owner_user_id" not in cols:
             await self._db.execute("ALTER TABLE chats ADD COLUMN owner_user_id INTEGER")
-        # who added the bot (2026-10): groups added earlier have no record of it
+        # who added the bot: groups added before this column existed have no record of it
         for col, kind in (("added_by", "INTEGER"), ("added_by_name", "TEXT")):
             if col not in cols:
                 await self._db.execute(f"ALTER TABLE chats ADD COLUMN {col} {kind}")
-        # learning from confident catches (2026-10): examples created before it lack these
+        # learning from confident catches: older examples lack these
         cur = await self._db.execute("PRAGMA table_info(examples)")
         cols = {r[1] for r in await cur.fetchall()}
         for col, kind in (("audit_id", "INTEGER"), ("held_until", "TEXT")):
             if col not in cols:
                 await self._db.execute(f"ALTER TABLE examples ADD COLUMN {col} {kind}")
-        # support files remember which version of the file reader cut them (1 = before 2026-10-13)
+        # support files remember which version of the file reader cut them (1 is the first reader)
         cur = await self._db.execute("PRAGMA table_info(kb_documents)")
         if "reader" not in {r[1] for r in await cur.fetchall()}:
             await self._db.execute("ALTER TABLE kb_documents ADD COLUMN reader INTEGER NOT NULL DEFAULT 1")
         await self._db.commit()
 
-    # ---- meaning-match examples -------------------------------------------
+    # Meaning-match examples
 
     async def example_add(self, chat_id: int, label: str, text: str, vector: bytes, model: str,
                           source: str, by: int | None, *, held_until: datetime | None = None,
@@ -442,7 +442,7 @@ class Store:
         return int((await cur.fetchone())[0])
 
     async def examples_recent(self, chat_id: int, limit: int = 10) -> list[sqlite3.Row]:
-        """Counting and held examples, newest first (held ones can be /forget-ten before they count)."""
+        """Counting and held examples, newest first (/forget also works on held ones before they count)."""
         cur = await self.db.execute(
             "SELECT id, chat_id, label, text, source, added_at, held_until FROM examples "
             "WHERE (active=1 OR held_until IS NOT NULL) AND chat_id IN (0, ?) ORDER BY id DESC LIMIT ?", (chat_id, limit))
@@ -474,7 +474,7 @@ class Store:
         cur = await self.db.execute("SELECT 1 FROM examples LIMIT 1")
         return await cur.fetchone() is None
 
-    # ---- support mode: a group's own FAQ files ------------------------------
+    # Support mode: a group's own FAQ files
 
     async def kb_add_document(self, chat_id: int, name: str, kind: str, size: int, chars: int, pages: int | None,
                               sha256: str, by: int | None, chunks: list[tuple[int, str | None, str, bytes]],
@@ -608,7 +608,7 @@ class Store:
         except Exception:
             return False
 
-    # ---- chats -----------------------------------------------------------
+    # Chats
 
     async def upsert_chat(self, chat_id: int, title: str | None) -> bool:
         """Returns True if the chat is new."""
@@ -647,7 +647,7 @@ class Store:
         await self.db.execute("UPDATE chats SET added_by=?, added_by_name=? WHERE chat_id=?", (user_id, name, chat_id))
         await self.db.commit()
 
-    # ---- the owner's activity record (ledger.py) ----------------------------
+    # The owner's activity record (ledger.py)
 
     async def _note(self, kind: str, chat_id: int | None, actor_id: int | None, *, actor_name: str | None = None,
                     target_id: int | None = None, target_name: str | None = None, **detail: Any) -> None:
@@ -769,7 +769,7 @@ class Store:
         await self.db.commit()
         return n
 
-    # ---- permits (who may add the bot to their own groups) -----------------
+    # Access: who may add the bot to their own groups
 
     async def add_permit(self, user_id: int, username: str | None, max_groups: int, expires_at: datetime | None,
                          note: str | None, by: int | None, daily_ai_cap: int = 1500) -> None:
@@ -817,7 +817,7 @@ class Store:
         return True, "ok"
 
     async def permit_valid_for_existing(self, user_id: int) -> bool:
-        """Is this customer's permit still good for groups they already registered?"""
+        """Is this user's access still good for groups they already registered?"""
         p = await self.get_permit(user_id)
         if not p or not p["active"]:
             return False
@@ -836,7 +836,7 @@ class Store:
         row = await cur.fetchone()
         return int(row["n"]) if row else 0
 
-    # ---- settings --------------------------------------------------------
+    # Settings
 
     async def get_settings(self, chat_id: int) -> dict[str, str]:
         cur = await self.db.execute(
@@ -870,7 +870,7 @@ class Store:
             await self._note("setting_reset", chat_id, by, key=key, old=old, new=None)
         await self.db.commit()
 
-    # ---- members ---------------------------------------------------------
+    # Members
 
     async def touch_member(
         self,
@@ -945,7 +945,7 @@ class Store:
         row = await cur.fetchone()
         return int(row["n"]) if row else 0
 
-    # ---- strikes ---------------------------------------------------------
+    # Strikes
 
     async def add_strike(
         self, chat_id: int, user_id: int, reason: str, ttl: timedelta | None, audit_id: int | None
@@ -959,7 +959,7 @@ class Store:
         return await self.active_strikes(chat_id, user_id)
 
     async def job_catches(self, chat_id: int, user_id: int) -> int:
-        """Fake job / task offers already removed for this person here (enforced, not undone)."""
+        """Fake job and task offers already removed for this person here (enforced, not undone)."""
         cur = await self.db.execute(
             "SELECT COUNT(*) FROM audit WHERE chat_id=? AND user_id=? AND mode='enforce' AND undone_at IS NULL "
             "AND json_extract(detail, '$.job_scam') = 1", (chat_id, user_id))
@@ -1008,7 +1008,7 @@ class Store:
         await self.db.commit()
         return cur.rowcount
 
-    # ---- allow lists -----------------------------------------------------
+    # Allow lists
 
     async def allow_user(self, chat_id: int, user_id: int, by: int | None) -> None:
         cur = await self.db.execute(
@@ -1040,7 +1040,7 @@ class Store:
         )
         return [int(r["user_id"]) for r in await cur.fetchall()]
 
-    # ---- bot admins (owner-granted, per group) ----------------------------
+    # Bot admins, per group
 
     async def add_bot_admin(self, chat_id: int, user_id: int, by: int | None) -> None:
         cur = await self.db.execute(
@@ -1103,7 +1103,7 @@ class Store:
             out[r["kind"]].add(r["domain"])
         return out
 
-    # ---- custom rules ----------------------------------------------------
+    # Custom rules
 
     async def add_rule(
         self, chat_id: int, pattern: str, action: str | None, duration_s: int | None,
@@ -1152,7 +1152,7 @@ class Store:
             )
         return list(await cur.fetchall())
 
-    # ---- timed actions ---------------------------------------------------
+    # Timed actions
 
     async def schedule_lift(
         self, chat_id: int, user_id: int, action: str, expires_at: datetime, audit_id: int | None
@@ -1187,7 +1187,7 @@ class Store:
             )
         await self.db.commit()
 
-    # ---- audit -----------------------------------------------------------
+    # Audit
 
     async def add_audit(
         self, *, chat_id: int, user_id: int | None, username: str | None, message_id: int | None,
@@ -1275,7 +1275,7 @@ class Store:
         await self.db.commit()
 
 
-    # ---- errors ----------------------------------------------------------
+    # Errors
 
     async def log_error(self, where: str, message: str, chat_id: int | None = None) -> None:
         # Telegram download errors carry the file URL, which contains the bot token
@@ -1295,7 +1295,7 @@ class Store:
         )
         return list(await cur.fetchall())
 
-    # ---- judge usage -----------------------------------------------------
+    # Judge usage
 
     async def add_judge_usage(
         self, chat_id: int, model: str, input_tokens: int, output_tokens: int,
@@ -1309,8 +1309,8 @@ class Store:
         await self.db.commit()
 
     async def judge_calls_since(self, chat_id: int, since: datetime, kind: str | None = None) -> int:
-        """AI calls for a group in a window. kind: None = spam judge + safety, 'safety' = safety only,
-        'judge' = spam judge only."""
+        """AI calls for a group in a window. kind None means the spam judge and the safety check, 'safety' the safety check only,
+        'judge' the spam judge only."""
         extra = {"safety": "AND verdict LIKE 'safety:%'",
                  "judge": "AND verdict NOT LIKE 'safety:%'"}.get(kind or "", "")
         cur = await self.db.execute(
@@ -1338,7 +1338,7 @@ class Store:
         )
         return list(await cur.fetchall())
 
-    # ---- CAS cache -------------------------------------------------------
+    # CAS cache
 
     async def cas_get(self, user_id: int, max_age: timedelta) -> bool | None:
         cur = await self.db.execute(
@@ -1361,7 +1361,7 @@ class Store:
         )
         await self.db.commit()
 
-    # ---- captcha ---------------------------------------------------------
+    # Captcha
 
     async def captcha_put(
         self, chat_id: int, user_id: int, message_id: int | None, deadline: datetime, answer: str | None
@@ -1380,7 +1380,7 @@ class Store:
         )
         return await cur.fetchone()
 
-    # ---- expiring messages -----------------------------------------------
+    # Expiring messages
 
     async def expire_message(self, chat_id: int, message_id: int, delete_at: datetime) -> None:
         await self.db.execute(
@@ -1408,7 +1408,7 @@ class Store:
         )
         await self.db.commit()
 
-    # ---- forward captcha -------------------------------------------------
+    # Forward captcha
 
     async def forward_get(self, chat_id: int, user_id: int) -> sqlite3.Row | None:
         cur = await self.db.execute(
@@ -1455,7 +1455,7 @@ class Store:
         )
         return list(await cur.fetchall())
 
-    # ---- stats -----------------------------------------------------------
+    # Stats
 
     async def stats(self, chat_id: int | None, since: datetime) -> dict[str, Any]:
         rows = await self.audit_since(chat_id, since)

@@ -188,13 +188,13 @@ class App:
     assistant: Any = None  # zyroguard.assistant.Assistant, set in main
     similar: Any = None    # zyroguard.similar.Library, set in main when the meaning match is on
     kb: Any = None         # zyroguard.kb.KnowledgeBase, support mode's files (needs the meaning match)
-    # multi-tenant: groups the bot serves (owner's static list + permit holders' registered groups)
+    # groups the bot serves: the static list plus groups registered by an owner or a user with access
     allowed_chats: set[int] = field(default_factory=set)
-    dm_context: dict[int, int] = field(default_factory=dict)   # user_id -> chat_id chosen with /use
-    access_ends: dict[int, datetime] = field(default_factory=dict)   # user's group -> when their access ends
+    dm_context: dict[int, int] = field(default_factory=dict)   # for each user_id, the chat_id chosen with /use
+    access_ends: dict[int, datetime] = field(default_factory=dict)   # for each user's group, when their access ends
 
     async def load_allowed(self) -> None:
-        """Static list plus every group the bot accepted earlier (owner-added or permit-added).
+        """Static list plus every group the bot accepted earlier (added by an owner or by a user with access).
         A chat row is only active while the bot is in that group, so active rows are all trusted."""
         self.allowed_chats = set(self.config.allowed_chat_ids)
         for c in await self.store.list_chats():
@@ -216,8 +216,8 @@ class App:
         self.access_ends = ends
 
     def chat_allowed(self, chat_id: int) -> bool:
-        """Only groups the bot accepted, and only while their user's access lasts. (An empty
-        ALLOWED_CHAT_IDS no longer opens the bot to every group.)"""
+        """Only groups the bot accepted, and only while their user's access lasts. An empty
+        ALLOWED_CHAT_IDS does not open the bot to every group."""
         if chat_id not in self.allowed_chats:
             return False
         ends = self.access_ends.get(chat_id)
@@ -234,7 +234,7 @@ class App:
         return await self.store.is_bot_admin(chat_id, user_id)
 
     async def groups_for(self, user_id: int) -> list[Any]:
-        """Groups this person may manage: all for owners, else owned + admin-of."""
+        """Groups this person may manage: all of them for owners, otherwise the ones they added or are an admin of."""
         out = []
         for c in await self.store.list_chats():
             cid = int(c["chat_id"])
@@ -243,7 +243,7 @@ class App:
         return out
 
     async def ai_budget_ok(self, chat_id: int) -> bool:
-        """Per-permit daily cap across all of a customer's groups. Owner groups are unlimited here."""
+        """Daily AI cap per user, shared by all of their groups. The owners' groups are unlimited here."""
         owner = await self.store.chat_owner(chat_id)
         if owner is None or self.config.is_owner(owner):
             return True

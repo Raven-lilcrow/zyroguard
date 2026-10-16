@@ -89,7 +89,7 @@ class Match:
 
 
 class Embedder:
-    """fastembed + ONNX on one CPU thread. Loaded once, in a worker thread."""
+    """fastembed and ONNX on one CPU thread. Loaded once, in a worker thread."""
 
     def __init__(self, model: str = MODEL, cache_dir: str | None = None):
         self.model = model
@@ -127,7 +127,7 @@ class Library:
         self._vecs = np.zeros((0, 0), dtype=np.float32)
         self._cache: OrderedDict[str, np.ndarray] = OrderedDict()   # the rules and the judge ask about the same text
 
-    # ---- lifecycle ---------------------------------------------------------
+    # Lifecycle
 
     async def start(self) -> None:
         """Load the model and the examples. Any failure leaves the bot running without it."""
@@ -198,7 +198,7 @@ class Library:
                     m.ham, m.ham_id = float(sims[i]), int(self._ids[i])
         return m
 
-    # ---- use ---------------------------------------------------------------
+    # Using the library
 
     async def match(self, chat_id: int, text: str) -> Match | None:
         if not self.ready or not usable(text):

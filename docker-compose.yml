@@ -13,7 +13,7 @@ services:
     read_only: true
     tmpfs:
       - /tmp
-    mem_limit: 1g   # the meaning-match model needs ~300 MB
+    mem_limit: 1g   # the meaning-match model uses about 600 MB
     cpus: "1.0"
     pids_limit: 200
     stop_grace_period: 20s

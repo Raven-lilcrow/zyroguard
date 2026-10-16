@@ -21,14 +21,14 @@ from .store import Store
 @dataclass(frozen=True)
 class Spec:
     key: str
-    kind: str  # bool | int | float | duration | action | choice | str | time
+    kind: str  # bool, int, float, duration, action, choice, str or time
     default: str
     label: str
     help: str
     choices: tuple[str, ...] = ()
     menu_options: tuple[str, ...] = ()  # values offered as toggle buttons
     group: str = "general"
-    max_len: int = 0  # str settings: longest value accepted, 0 = no limit
+    max_len: int = 0  # str settings: longest value accepted, 0 means no limit
 
 
 SPECS: dict[str, Spec] = {}
@@ -409,7 +409,7 @@ class SettingsService:
     def invalidate(self, chat_id: int) -> None:
         self._cache.pop(chat_id, None)
 
-    # ---- inline menu -----------------------------------------------------
+    # Inline menu
 
     def menu_markup(self, cs: ChatSettings, group: str | None) -> InlineKeyboardMarkup:
         rows: list[list[InlineKeyboardButton]] = []

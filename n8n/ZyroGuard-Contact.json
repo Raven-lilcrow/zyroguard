@@ -37,7 +37,7 @@
     },
     {
       "parameters": {
-        "sendTo": "raven@publicai.io",
+        "sendTo": "you@example.com",
         "subject": "={{ $json.body.subject }}",
         "emailType": "text",
         "message": "={{ $json.body.text }}",

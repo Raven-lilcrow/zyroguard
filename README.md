@@ -157,8 +157,9 @@ Add the bot to the group as an admin with three rights: **Delete messages**, **B
 group, and every line should show a check mark. A failed line comes with a one-line fix.
 
 The bot only stays in groups added from that account, groups added by a user with access who is
-an admin there, and groups listed in `ALLOWED_CHAT_IDS`. It leaves any other group. The `/` command menus are registered by
-the bot itself, so there is nothing to set up for them in @BotFather.
+an admin there, and groups listed in `ALLOWED_CHAT_IDS`. It leaves any other group. The `/`
+command menus are registered by the bot itself, so there is nothing to set up for them in
+@BotFather.
 
 ## Configuration
 
@@ -311,8 +312,8 @@ trigger `warn_action` (a one-day mute).
 ### Reports, notices and summaries
 
 Reports go to the group's `modlog_chat_id` if one is set, otherwise to the private chat of the
-user who added the bot, otherwise to `MODLOG_CHAT_ID`. Each report says who, what and why, with **Why**, **Undo** and **Teach as spam** buttons. In enforce mode
-the group also sees a short notice that deletes itself after `notice_ttl`. Every group gets a daily
+user who added the bot, otherwise to `MODLOG_CHAT_ID`. Each report says who, what and why, with
+**Why**, **Undo** and **Teach as spam** buttons. In enforce mode the group also sees a short notice that deletes itself after `notice_ttl`. Every group gets a daily
 summary at `digest_time`, in Asia/Manila time (set in `zyroguard/scheduler.py`). `/log`,
 `/why <number>` and `/stats` show the same history on demand.
 
@@ -351,8 +352,9 @@ of files (up to about 16,000 characters) is sent whole with every question so no
 missed; larger ones are searched with the same meaning model as the spam check. Any link in an
 answer that isn't in the files or the contacts is removed before sending. An answered question
 costs about 2 cents. Unless the group has given the bot instructions, a question with nothing
-related in the files gets the can't-answer message without calling the AI at all. Only the user who added the bot, the
-group's creator and admins who can add new admins may change where members are sent for help, and every change is reported.
+related in the files gets the can't-answer message without calling the AI at all. Only the user
+who added the bot, the group's creator and admins who can add new admins may change where members
+are sent for help, and every change is reported.
 
 The full guide, including the weekly **Unanswered** list, is in
 [DOCUMENTATION.md](DOCUMENTATION.md#how-do-i-set-up-zyromod-in-my-telegram-group).
@@ -474,7 +476,7 @@ python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
 .venv/Scripts/python -m pytest
 ```
 
-There are 476 tests, all against a fake Telegram, with no network access. An end-to-end check,
+There are 482 tests, all against a fake Telegram, with no network access. An end-to-end check,
 [`tools/e2e_newgroup.py`](tools/e2e_newgroup.py), drives the real dispatcher through a whole setup:
 a brand-new group being added, the captcha, five moderation cases, ZyroMod setup and every way of
 asking.

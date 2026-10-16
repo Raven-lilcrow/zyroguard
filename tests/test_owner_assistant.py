@@ -37,7 +37,7 @@ def test_owner_guide_lists_every_owner_command_and_where_to_send_it():
     assert {"permit", "revoke", "permits", "purge", "groups", "usage"} <= set(owner_only)
     for name in owner_only + ["reloadrules"]:
         assert f"`/{name}" in guide, name
-    # the group team commands belong to users now, not to the owner section
+    # the group team commands belong to users, not to the owner section
     for name in ("addadmin", "removeadmin", "addmod", "removemod", "showadmin"):
         assert name not in owner_only and f"`/{name}" not in guide, name
     assert "`/purge <group id>`: Deletes all records of a group I already left." in guide

@@ -14,7 +14,7 @@ from aiogram.types import Message
 
 from . import ledger
 from .app import App
-from .commands import args, cid, reply, resolve_target, who
+from .commands import SERVICE_ACCOUNTS, args, cid, reply, resolve_target, who
 from .durations import DurationError, parse_duration
 from .store import from_iso, utcnow
 
@@ -89,8 +89,8 @@ async def cmd_usage(m: Message, app: App, command: CommandObject) -> None:
     await reply(m, "\n".join(lines))
 
 
-# ---- the group's team: bot admins and trusted users -------------
-# Paying users run their own team. In a group I guard: /addmod, /removemod (the same as /allow) and
+# The group's team: bot admins and trusted users
+# Each group's own people run their team. In a group I guard: /addmod, /removemod (the same as /allow) and
 # /showadmin for any admin of that group; /addadmin and /removeadmin, which hand out my admin
 # commands, only for the person who added me, the group's creator and admins who can add new admins
 # (the same people who may change the support contacts), so a bot admin can't add more bot admins.
@@ -210,10 +210,10 @@ async def cmd_showadmin(m: Message, app: App) -> None:
     await reply(m, "\n".join(lines).rstrip())
 
 
-# ---- permits: who may add me to their own groups ---------------------------
+# Access: who may add me to their own groups
 
 async def _user_from_token(app: App, tok: str) -> tuple[int | None, str | None]:
-    """@username (seen anywhere) or numeric id -> (user_id, username)."""
+    """(user_id, username) for an @username (seen anywhere) or a numeric id."""
     if tok.lstrip("-").isdigit():
         cur = await app.store.db.execute(
             "SELECT username FROM members WHERE user_id=? ORDER BY last_msg_at DESC LIMIT 1", (int(tok),))
@@ -243,6 +243,11 @@ async def cmd_permit(m: Message, app: App, command: CommandObject) -> None:
     user_id, username = await _user_from_token(app, toks[0])
     if user_id is None:
         await reply(m, "I do not know that username yet. " + usage)
+        return
+    if user_id in SERVICE_ACCOUNTS or user_id == app.bot_id:
+        await reply(m, "That id is a Telegram system account (for example the one every anonymous admin posts as), "
+                       "not a person, so it can't get access.\n"
+                       "Ask the person to send /id to me in a private chat and use that number.")
         return
     rest = toks[1:]
     max_groups = 1

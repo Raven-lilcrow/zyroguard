@@ -50,7 +50,7 @@ def has_visual(m: Message) -> bool:
 def text_triggers(app: App, text: str) -> bool:
     if not text:
         return False
-    folded = fold(text)   # so ❌❌❌ reads as xxx and 🅷🅾🆃 as hot
+    folded = fold(text)   # so cross marks read as xxx and boxed letters as plain words
     return any(p.search(text) or p.search(folded) for p in app.rules.safety_triggers)
 
 

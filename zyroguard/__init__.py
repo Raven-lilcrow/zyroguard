@@ -1,1 +1,1 @@
-"""ZyroGuard: Telegram anti-spam / anti-phishing bot."""
+"""ZyroGuard: Telegram bot against spam and phishing."""

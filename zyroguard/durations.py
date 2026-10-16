@@ -37,7 +37,7 @@ class DurationError(ValueError):
 
 @dataclass(frozen=True)
 class Duration:
-    seconds: int | None  # None = permanent
+    seconds: int | None  # None means permanent
 
     @property
     def permanent(self) -> bool:
@@ -118,16 +118,16 @@ def clamp_for_telegram(d: Duration) -> tuple[Duration, str | None]:
 
 
 def until_date(d: Duration, now: datetime | None = None) -> datetime | None:
-    """Value for aiogram's ``until_date`` parameter (None = permanent)."""
+    """Value for aiogram's ``until_date`` parameter (None means permanent)."""
     clamped, _ = clamp_for_telegram(d)
     return clamped.expires_at(now)
 
 
 def parse_action(tokens: list[str]) -> tuple[str, Duration | None]:
-    """Parse ``["mute", "2h"]`` / ``["ban"]`` / ``["kick"]`` into (action, duration).
+    """Parse ``["mute", "2h"]``, ``["ban"]`` or ``["kick"]`` into (action, duration).
 
     Accepted actions: delete, warn, kick, mute, ban, tmute, tban, none.
-    ``tmute``/``tban`` are Rose aliases and require a duration.
+    ``tmute`` and ``tban`` are Rose aliases and require a duration.
     """
     if not tokens:
         raise DurationError("Expected an action: delete, warn, kick, mute [dur], ban [dur].")

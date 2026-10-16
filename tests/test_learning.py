@@ -19,7 +19,7 @@ MIGRATE = "We are migrating to a new contract address next week, details soon"
 
 @pytest.fixture(autouse=True)
 def learning_on(monkeypatch):
-    """These tests are about the two learning features, which ship switched off (2026-10-13)."""
+    """These tests are about the two learning features, which ship switched off."""
     import dataclasses
     from zyroguard import settings
     for key in ("similarity_learn", "judge_examples"):

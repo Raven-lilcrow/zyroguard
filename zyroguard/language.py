@@ -1,7 +1,7 @@
 """Which language is a message in? No network, no model, no extra package.
 
 Non-Latin alphabets are told apart by their script (Cyrillic, Chinese, Japanese,
-Korean, Arabic ...). Latin-alphabet languages are told apart by their most common
+Korean, Arabic and others). Latin-alphabet languages are told apart by their most common
 small words. When the answer is not clear (short messages, emoji, mixed Taglish)
 the result is "unknown", and nothing is ever deleted for an unknown language.
 """
@@ -117,7 +117,7 @@ def name(code: str) -> str:
 
 
 def parse_languages(raw: str) -> str:
-    """'English, tagalog' -> 'en,tl'. Empty, 'all' or 'any' -> '' (every language allowed)."""
+    """'English, tagalog' becomes 'en,tl'. Empty, 'all' or 'any' become '' (every language allowed)."""
     out: list[str] = []
     for part in re.split(r"[\s,;/]+", (raw or "").strip().lower()):
         if not part or part in {"all", "any", "none", "off"}:
