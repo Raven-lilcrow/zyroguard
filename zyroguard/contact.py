@@ -31,6 +31,7 @@ MAX_CHARS = 2000
 
 _pending: dict[int, datetime] = {}   # when each user_id tapped the button
 _last_sent: dict[int, datetime] = {}
+BLOCKED = "Sorry, I can't pass on messages from you."
 
 
 def _prune() -> None:
@@ -60,6 +61,9 @@ async def begin(m: Message, app: App) -> None:
     if m.chat.type != ChatType.PRIVATE or not m.from_user:
         return
     _prune()
+    if await app.store.contact_blocked(m.from_user.id):
+        await m.answer(BLOCKED)
+        return
     _pending[m.from_user.id] = utcnow()
     await m.answer("Write your message in one go: who you are, what group it is for, and what you need.\n"
                    "I will pass it straight to the admin. Send /cancel to stop.")
@@ -82,6 +86,10 @@ async def cmd_contact(m: Message, app: App) -> None:
 async def cb_contact(cb: CallbackQuery, app: App) -> None:
     from .callbacks import genuine
     if genuine(cb) and cb.message and cb.message.chat.type == ChatType.PRIVATE:
+        if await app.store.contact_blocked(cb.from_user.id):
+            await cb.message.answer(BLOCKED)
+            await cb.answer()
+            return
         _pending[cb.from_user.id] = utcnow()
         await cb.message.answer("Write your message in one go: who you are, what group it is for, and what you need.\n"
                                 "I will pass it straight to the admin. Send /cancel to stop.")
@@ -128,6 +136,9 @@ async def _email(app: App, subject: str, body: str) -> bool:
 async def deliver(m: Message, app: App) -> None:
     user = m.from_user
     _pending.pop(user.id, None)
+    if await app.store.contact_blocked(user.id):
+        await m.answer(BLOCKED)
+        return
     last = _last_sent.get(user.id)
     if last and (utcnow() - last) < timedelta(seconds=COOLDOWN_S):
         await m.answer("You already sent a message a few minutes ago. The admin has it, please wait for a reply.")
@@ -135,14 +146,19 @@ async def deliver(m: Message, app: App) -> None:
     text = (m.text or "").strip()[:MAX_CHARS]
     who = f"@{user.username}" if user.username else html.escape(user.full_name)
     header = f"New message via ZyroGuard from {who} (id {user.id}, {html.escape(user.full_name)})"
+    from .access_requests import current_terms, request_markup
+    now = await current_terms(app, user.id)
     delivered = 0
     for owner_id in app.config.owner_ids:
         try:
             await app.bot.send_message(
                 owner_id, f"✉️ <b>Contact</b> · via ZyroGuard\n<b>From {who}</b> · {html.escape(user.full_name)} · id <code>{user.id}</code>\n\n"
                           f"{html.escape(text)}\n\n"
-                          f'<a href="tg://user?id={user.id}">Reply to them</a> · give them access: <code>/permit {user.id}</code>',
-                parse_mode="HTML")
+                          + (f"{now}\n" if now else "")
+                          + f'<a href="tg://user?id={user.id}">Reply to them</a>\n\n'
+                          "<b>Give them access?</b> Yes asks how many groups and for how long. "
+                          "Ban stops their messages here.",
+                parse_mode="HTML", reply_markup=request_markup(user.id))
             delivered += 1
         except Exception as e:  # noqa: BLE001
             await app.store.log_error("contact.dm", f"{type(e).__name__}: {e}")

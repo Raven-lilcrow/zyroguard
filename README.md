@@ -476,7 +476,7 @@ python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt
 .venv/Scripts/python -m pytest
 ```
 
-There are 482 tests, all against a fake Telegram, with no network access. An end-to-end check,
+There are 495 tests, all against a fake Telegram, with no network access. An end-to-end check,
 [`tools/e2e_newgroup.py`](tools/e2e_newgroup.py), drives the real dispatcher through a whole setup:
 a brand-new group being added, the captcha, five moderation cases, ZyroMod setup and every way of
 asking.

@@ -13,7 +13,7 @@ from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ChatMemberStatus, ChatType
 from aiogram.types import ChatMemberUpdated, ErrorEvent, InlineKeyboardButton, InlineKeyboardMarkup, Message
 
-from . import assistant, captcha, commands, contact, diag, forwards, help as help_mod, http, kb, ledger, menu, owner, pipeline, scheduler, similar, support
+from . import access_requests, assistant, captcha, commands, contact, diag, forwards, help as help_mod, http, kb, ledger, menu, owner, pipeline, scheduler, similar, support
 from .actions import Enforcer
 from .app import AdminCache, App
 from .config import VERSION, load_config
@@ -302,6 +302,7 @@ async def run() -> None:
     dp["app"] = app
     dp.message.outer_middleware(assistant.MentionedCommands())   # "@zyroguard_bot /spam" works like "/spam"
     dp.include_router(owner.router)
+    dp.include_router(access_requests.router)   # before support/assistant: an owner's typed answers to its steps
     dp.include_router(support.router)   # before contact and help: /cancel, /start?start=zyromod, setup replies
     dp.include_router(contact.router)   # before help: it owns /start?start=contact
     dp.include_router(help_mod.router)

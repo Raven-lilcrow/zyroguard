@@ -45,6 +45,9 @@ KINDS: dict[str, tuple[str, str, bool]] = {
     "access_revoked": ("Access", "Access revoked", False),
     "access_expired": ("Access", "Access expired", True),
     "purge": ("Access", "Group data deleted", False),
+    "request_declined": ("Access", "Request declined", False),
+    "contact_blocked": ("Access", "Contact blocked", False),
+    "contact_unblocked": ("Access", "Contact unblocked", False),
     "admin_action": ("Admin action", "Action", False),
     "undo": ("Admin action", "Undo", False),
     "setting": ("Admin change", "Setting changed", False),
@@ -338,6 +341,10 @@ async def event_row(app: App, r: Any) -> list[str]:
         details = "End date passed" + (f"; left: {', '.join(d.get('groups'))}" if d.get("groups") else "; no groups")
     elif kind == "purge":
         details = f"{d.get('rows', 0)} records deleted"
+    elif kind in {"request_declined", "contact_blocked", "contact_unblocked"}:
+        details = {"request_declined": "Said no to an access request",
+                   "contact_blocked": "Can no longer send messages through Contact the admin",
+                   "contact_unblocked": "Can send messages through Contact the admin again"}[kind]
     elif kind == "daily_summary":
         details = d.get("text", "")
     else:

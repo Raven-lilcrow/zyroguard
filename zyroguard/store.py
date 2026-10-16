@@ -303,6 +303,13 @@ CREATE TABLE IF NOT EXISTS ledger_state (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+-- People the owner stopped from sending messages through Contact the admin (Ban on a request).
+CREATE TABLE IF NOT EXISTS contact_blocks (
+    user_id    INTEGER PRIMARY KEY,
+    blocked_by INTEGER,
+    blocked_at TEXT NOT NULL
+);
 """
 
 # tables that hold per-group rows, for /purge
@@ -787,6 +794,20 @@ class Store:
         await self.db.commit()
         return bool(cur.rowcount)
 
+
+    async def contact_block(self, user_id: int, by: int | None) -> None:
+        await self.db.execute("INSERT OR IGNORE INTO contact_blocks(user_id, blocked_by, blocked_at) VALUES(?,?,?)",
+                              (user_id, by, iso(utcnow())))
+        await self.db.commit()
+
+    async def contact_unblock(self, user_id: int) -> bool:
+        cur = await self.db.execute("DELETE FROM contact_blocks WHERE user_id=?", (user_id,))
+        await self.db.commit()
+        return bool(cur.rowcount)
+
+    async def contact_blocked(self, user_id: int) -> bool:
+        cur = await self.db.execute("SELECT 1 FROM contact_blocks WHERE user_id=?", (user_id,))
+        return await cur.fetchone() is not None
 
     async def known_name(self, user_id: int) -> tuple[str | None, str | None]:
         """(display name, username) from the latest group message this person sent, if any."""

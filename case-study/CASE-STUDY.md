@@ -90,7 +90,7 @@ The bot holds ban rights in groups it does not own, so it is built to fail close
 - The database is backed up every night and kept for 14 days. Every deploy tags the previous image so a rollback is one command.
 - Production checks are read-only. They open the database in read-only mode and send no messages, and model tests run in a throwaway container with the database mounted read-only.
 - Support files are read in memory and never saved as files; only their text is kept, per group. Files with passwords or keys in them are refused, and only the group's top admins can change where members are sent for help, with every change reported.
-- 482 tests, including end-to-end runs of the whole pipeline against a fake Telegram, plus a check that walks a brand-new group through every feature on the live version with the real AI (31 of 31 passed).
+- 495 tests, including end-to-end runs of the whole pipeline against a fake Telegram, plus a check that walks a brand-new group through every feature on the live version with the real AI (31 of 31 passed).
 
 ## What the numbers do not say
 

@@ -412,7 +412,7 @@ COMMANDS: dict[str, tuple[str, str, str]] = {
     "groups": ("Owner only. Every group I am in.", "/groups", "/groups"),
     "usage": ("Owner only. AI judge usage per group.", "/usage [period]", "/usage 7d"),
     "use": ("In our private chat: pick which of your groups the commands apply to.", "/use, or /use <group id>", "/use"),
-    "permit": ("Owner only. Lets someone add me to their own group. Optional: how many groups, for how long, a note.", "/permit @user [groups] [time] [note]", "/permit @alice 2 30d paid plan"),
+    "permit": ("Owner only. Lets someone add me to their own group. Send just the person and I ask how many groups, for how long (like 30d, 3mo, 1y or no end) and a note, with buttons. Or give it all in one line. Contact messages have Yes, No and Ban buttons that do the same.", "/permit @user, or /permit @user [groups] [time] [note]", "/permit @alice 2 3mo paid plan"),
     "revoke": ("Owner only. Takes a permit back: I leave their groups and delete their records.", "/revoke @user or id", "/revoke @alice"),
     "permits": ("Owner only. Who has a permit and which groups they use.", "/permits", "/permits"),
     "purge": ("Owner only. Deletes all records of a group I already left.", "/purge <group id>", "/purge -1001234"),

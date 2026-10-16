@@ -12,9 +12,9 @@ from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.filters import Command, CommandObject
 from aiogram.types import Message
 
-from . import ledger
+from . import access_requests, ledger
 from .app import App
-from .commands import SERVICE_ACCOUNTS, args, cid, reply, resolve_target, who
+from .commands import args, cid, reply, resolve_target, who
 from .durations import DurationError, parse_duration
 from .store import from_iso, utcnow
 
@@ -234,8 +234,8 @@ async def cmd_permit(m: Message, app: App, command: CommandObject) -> None:
     if not is_owner(m, app):
         raise SkipHandler
     toks = args(command)
-    usage = ("How to use: /permit @user or id, then optionally how many groups, how many days, and a note.\n"
-             "Example: /permit @alice 2 30d paid plan\n"
+    usage = ("How to use: /permit @user or id, and I ask how many groups and for how long.\n"
+             "Or all in one line: /permit @alice 2 3mo paid plan (time like 30d, 4w, 3mo, 1y or forever).\n"
              "Do not know their id? Ask them to send /id to me in a private chat.")
     if not toks:
         await reply(m, usage)
@@ -244,59 +244,26 @@ async def cmd_permit(m: Message, app: App, command: CommandObject) -> None:
     if user_id is None:
         await reply(m, "I do not know that username yet. " + usage)
         return
-    if user_id in SERVICE_ACCOUNTS or user_id == app.bot_id:
-        await reply(m, "That id is a Telegram system account (for example the one every anonymous admin posts as), "
-                       "not a person, so it can't get access.\n"
-                       "Ask the person to send /id to me in a private chat and use that number.")
+    why = access_requests.refusal(app, user_id)
+    if why:
+        await reply(m, why)
         return
     rest = toks[1:]
+    if not rest:   # only the person: ask the rest with buttons
+        await access_requests.start(app, m.from_user, user_id, username)
+        return
     max_groups = 1
-    expires = None
+    length = None
     if rest and rest[0].isdigit():
         max_groups = max(1, int(rest.pop(0)))
-    if rest:
+    if rest and (rest[0][:1].isdigit() or rest[0].lower() in access_requests.NO_END):
         try:
-            d = parse_duration(rest[0])
-            if d.seconds:
-                expires = utcnow() + timedelta(seconds=d.seconds)
-            rest.pop(0)
-        except DurationError:
-            pass
+            length = access_requests.access_length(rest.pop(0))
+        except DurationError as e:
+            await reply(m, f"{e}\n\n{usage}")
+            return
     note = " ".join(rest) or None
-    before = await app.store.get_permit(user_id)
-    await app.store.add_permit(user_id, username, max_groups, expires, note, m.from_user.id)
-    await app.refresh_access()
-
-    def _terms(groups, ends, n):
-        ends_dt = from_iso(ends) if isinstance(ends, str) else ends
-        return f"{groups} group(s), " + (f"until {ends_dt:%Y-%m-%d %H:%M} UTC" if ends_dt else "no end date") + (f", {n}" if n else "")
-
-    changed = before is not None and before["active"] and not (
-        before["expires_at"] and from_iso(before["expires_at"]) < utcnow())
-    await ledger.note(app, "access_changed" if changed else "access_given", None, actor=m.from_user,
-                      target=user_id, max_groups=max_groups, expires_at=expires.isoformat() if expires else None,
-                      note=note, username=username,
-                      old=_terms(before["max_groups"], before["expires_at"], before["note"]) if before else "",
-                      new=_terms(max_groups, expires, note))
-    label = f"@{username}" if username else f"<code>{user_id}</code>"
-    until = f"until {expires:%b %d, %Y}" if expires else "with no end date"
-    told = True
-    try:
-        await app.bot.send_message(
-            user_id,
-            "<b>You can now add ZyroGuard to your group.</b>\n"
-            "1. Add @" + app.bot_username + " to the group.\n"
-            "2. Make it an admin with Delete messages, Ban users and Invite users via link.\n"
-            "3. Send /diag here to check everything.\n\n"
-            "You manage the group from this private chat: /settings, /mode, /log and the rest. My reports come here too.",
-            parse_mode="HTML")
-    except Exception:  # noqa: BLE001
-        told = False
-    await reply(m, f"<b>Permit given</b> to {label}: up to {max_groups} group(s), {until}.\n"
-                  + ("I sent them the steps in their private chat." if told else
-                     "I could not message them yet (they have not started a chat with me). Tell them to press Start on @"
-                     + app.bot_username + " and add me to their group.") + "\n"
-                  "Take it back any time with /revoke.")
+    await reply(m, await access_requests.grant(app, m.from_user, user_id, username, max_groups, length, note))
 
 
 @router.message(Command("revoke"))
