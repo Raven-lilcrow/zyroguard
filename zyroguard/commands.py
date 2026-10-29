@@ -821,6 +821,123 @@ async def cmd_log(m: Message, app: App, command: CommandObject) -> None:
     await reply(m, "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None)
 
 
+# Banned users
+
+BANNED_PAGE = 20
+
+
+def banned_picker(chats) -> InlineKeyboardMarkup:
+    rows = [[InlineKeyboardButton(text=(c["title"] or str(c["chat_id"]))[:40], callback_data=f"banned:{c['chat_id']}:0")]
+            for c in chats[:20]]
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def _ban_status(row, now: datetime) -> str:
+    """'forever', or the length of a timed ban and where it stands: still on, over, or lifted early."""
+    expires = from_iso(row["expires_at"]) if row["expires_at"] else None
+    if row["duration_s"] is None or expires is None:
+        return "forever"
+    length = format_duration(int(row["duration_s"]))
+    if expires <= now:
+        return f"{length}, over"
+    if row["lift_done"]:
+        return f"{length}, lifted early"
+    return f"{length}, until {when(expires)}"
+
+
+async def banned_page(app: App, chat_id: int, offset: int = 0) -> tuple[str, InlineKeyboardMarkup | None]:
+    """One page of everyone I banned in a group, newest first, with Previous / Next buttons when needed."""
+    row = await app.store.get_chat(chat_id)
+    title = html.escape((row["title"] if row else None) or str(chat_id))
+    total = await app.store.banned_count(chat_id)
+    if not total:
+        text = f"🚫 <b>{title}</b> · banned users\n\nI have not banned anyone here yet."
+        cs = await app.settings.get(chat_id)
+        if cs.raw("mode") == "shadow":
+            text += " This group is in shadow mode, so I only report what I would do. See /log."
+        return text, None
+    last_page = (total - 1) // BANNED_PAGE * BANNED_PAGE
+    offset = max(0, min(offset, last_page))
+    rows = await app.store.banned_users(chat_id, BANNED_PAGE, offset)
+    now = utcnow()
+    lines = [f"🚫 <b>{title}</b> · banned users · {total}",
+             f"{offset + 1}–{offset + len(rows)} of {total}, newest first." if total > BANNED_PAGE else "Newest first.",
+             ""]
+    for r in rows:
+        if r["username"]:
+            name = f"@{r['username']}"
+        elif r["display_name"]:
+            name = html.escape(r["display_name"][:32])
+        else:
+            name = "no username"
+        times = f" · banned {r['times']}×" if r["times"] > 1 else ""
+        banned_at = from_iso(r["ts"]) or now
+        lines.append(f"{name} (<code>{r['user_id']}</code>) · {ago(banned_at, now)} · {_ban_status(r, now)}{times}")
+        lines.append(f"   #{r['id']} · {html.escape((r['reason'] or '')[:40])}")
+    lines.append("")
+    lines.append("Let one back in: /unban @user or /unban &lt;id&gt;. The full story of a ban: /why with its number.")
+    nav = []
+    if offset > 0:
+        nav.append(InlineKeyboardButton(text="◀️ Previous", callback_data=f"banned:{chat_id}:{max(0, offset - BANNED_PAGE)}"))
+    if offset + len(rows) < total:
+        nav.append(InlineKeyboardButton(text="Next ▶️", callback_data=f"banned:{chat_id}:{offset + BANNED_PAGE}"))
+    return "\n".join(lines), InlineKeyboardMarkup(inline_keyboard=[nav]) if nav else None
+
+
+@router.message(Command("listbanned", "list_banned", "list-banned", "banned"))
+async def cmd_listbanned(m: Message, app: App, command: CommandObject) -> None:
+    """Everyone I banned in a group, by username. In a group: that group. In a private chat: asks
+    which group first (with one group, or /listbanned <group id>, it answers straight away)."""
+    if not m.from_user:
+        return
+    if m.chat.type != ChatType.PRIVATE:
+        if not await require_admin(m, app):
+            return
+        text, markup = await banned_page(app, m.chat.id)
+        await reply(m, text, markup)
+        return
+    mine = await app.groups_for(m.from_user.id)
+    if not mine:
+        from .contact import contact_button, contact_line
+        await m.answer(NO_GROUP + contact_line(app), reply_markup=contact_button(app))
+        return
+    arg = (command.args or "").strip()
+    wanted = int(arg) if arg.lstrip("-").isdigit() else None
+    if wanted is None and len(mine) == 1:
+        wanted = int(mine[0]["chat_id"])
+    if wanted is None:
+        await m.answer("Which group do you want the banned list for? Pick one:", reply_markup=banned_picker(mine))
+        return
+    if not any(int(c["chat_id"]) == wanted for c in mine):
+        await m.answer("That is not one of your groups. Send /listbanned on its own to pick one.")
+        return
+    text, markup = await banned_page(app, wanted)
+    await m.answer(text, parse_mode="HTML", reply_markup=markup)
+
+
+@router.callback_query(F.data.startswith("banned:"))
+async def cb_banned(cb: CallbackQuery, app: App) -> None:
+    """A group button on the picker, or Previous / Next on a page: show that page in place."""
+    if not genuine(cb):
+        await reject(cb)
+        return
+    try:
+        _, chat_s, offset_s = cb.data.split(":")
+        chat_id, offset = int(chat_s), int(offset_s)
+    except ValueError:
+        await cb.answer()
+        return
+    if chat_id not in app.allowed_chats or not await app.controls(cb.from_user.id, chat_id):
+        await cb.answer("That is not one of your groups.", show_alert=True)
+        return
+    text, markup = await banned_page(app, chat_id, offset)
+    try:
+        await cb.message.edit_text(text, parse_mode="HTML", reply_markup=markup)
+    except Exception:  # noqa: BLE001
+        pass   # same page tapped twice, or the message is too old to edit
+    await cb.answer()
+
+
 @router.message(Command("undo"))
 async def cmd_undo(m: Message, app: App, command: CommandObject) -> None:
     if not await require_admin(m, app):

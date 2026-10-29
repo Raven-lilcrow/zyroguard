@@ -371,7 +371,7 @@ reply, an `@username` or a numeric id. Tagging the bot first (`@yourbot /ban`) w
 | Moderation | `/ban [time]`, `/mute [time]`, `/kick`, `/warn`, `/unban`, `/unmute`, `/strikes`, `/pardon` |
 | Team | `/showadmin`, `/addadmin`, `/removeadmin`, `/addmod`, `/removemod` (see below) |
 | Lists | `/allow`, `/disallow`, `/allowed`, `/allowdomain`, `/blockdomain`, `/rule add <regex> [action] [time]`, `/rule del <id>`, `/rule list` |
-| History | `/log [n]`, `/why <number>`, `/undo <number>`, `/stats [time]` |
+| History | `/log [n]`, `/listbanned`, `/why <number>`, `/undo <number>`, `/stats [time]` |
 | Teaching | `/spam`, `/notspam`, `/examples`, `/forget <number>` |
 | Settings | `/settings`, `/settings list`, `/set <key> <value>`, `/unset <key>`, `/mode shadow\|enforce`, `/pause <time>`, `/resume`, plus shortcuts like `/setcaptchatime`, `/setflood` and `/setstrike` |
 | ZyroMod | `/zyromod` (files, email, button, instructions, test, unanswered questions, on and off) |

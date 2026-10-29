@@ -507,6 +507,7 @@ Warnings and automatic strikes share the same counter.
 |---|---|
 | `/stats [dur]` | Actions in the last 24h (or `7d`, `30d`): by action, by rule, judge calls, undos. |
 | `/log [n]` | Last n actions with their numbers, plus Why and Undo buttons for the latest five. |
+| `/listbanned` | Everyone the bot banned in the group, by username, newest first, 20 per page with Next and Previous buttons. Each line has the ban's number for `/why` and the user's id for `/unban`. In the private chat the bot first asks which group (or take `/listbanned <group id>`). `/banned` is the same. |
 | `/undo <id>` | Reverse an action by its number (shown in every log-group post and in `/log`): restores the user and clears the strike. |
 | `/why <id>` | Explain exactly which rule or judge verdict caused an action. Also works as a reply to a bot action. |
 

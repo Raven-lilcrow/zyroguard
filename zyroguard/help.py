@@ -119,6 +119,7 @@ Reply to someone's message with the command, or add their @username.
 
 <b>Everything I do is on record</b>
 /log – my last actions, with their numbers
+/listbanned – everyone I banned here, by username
 /why 12 – the full story of action 12
 /undo 12 – reverse it
 /stats 7d – what I caught lately
@@ -148,6 +149,7 @@ Commands sent here apply to the group you are working on.
 /settings – the button menu for that group.
 /diag – health check for that group.
 /log – my last actions there, with undo numbers.
+/listbanned – everyone I banned, by username. I ask which group first.
 
 My reports about that group also arrive here, unless you set a log group with /set modlog_chat_id.
 Things that need a message to reply to (like /ban as a reply) and /report still happen in the group.""",
@@ -159,6 +161,7 @@ Reply to their message with the command, or write the command and their @usernam
 /kick – remove them. They can come back (and get the captcha again).
 /warn [reason] – give a strike. As a reply it also deletes that message. At the warn limit (3 by default) the warn action fires, see /setwarnlimit and /setwarnmode.
 /unban @user – let a banned user back.
+/listbanned – everyone I banned here, by username, newest first.
 /unmute @user – let a muted user write again.
 /strikes @user – how many strikes they have. /pardon @user – clear them.
 /undo &lt;number&gt; – reverse anything I did. The number is in every report and in /log.
@@ -273,6 +276,7 @@ The menu lists the questions I couldn't answer, so you know what to add to your 
     "check": """<b>Seeing what I did, and testing me</b>
 /diag – health check. Tells you exactly what to fix if something is off.
 /log – my last actions with their numbers. /why &lt;number&gt; – the full story of one action.
+/listbanned – everyone I banned here, by username.
 /test &lt;some text&gt; – I say what I would do with that text. Nothing is deleted.
 /stats 7d – how much I caught in the last 7 days.
 /id – ids of this chat and you.
@@ -398,6 +402,10 @@ COMMANDS: dict[str, tuple[str, str, str]] = {
     "test": ("Shows what I would do with a text. Nothing is deleted.", "/test <text>, or reply to a message with /test", "/test free USDT, DM me"),
     "why": ("The full story of one action.", "/why <action number>, or reply to the user's message with /why", "/why 12"),
     "log": ("My last actions with their numbers.", "/log [how many]", "/log 20"),
+    "listbanned": ("Everyone I banned in the group, by username, newest first, with each ban's number for /why "
+                   "and /unban. 20 per page, with Next and Previous buttons. In our private chat I first ask which "
+                   "group, unless you only have one. /banned does the same.",
+                   "/listbanned, or in our private chat /listbanned <group id>", "/listbanned"),
     "stats": ("How much I caught in a period.", "/stats [period]", "/stats 7d"),
     "id": ("Shows this chat's id, your id, and the id of a user you replied to.", "/id", "/id"),
     "addadmin": ("Lets someone use my admin commands in this group, even if they are not a Telegram admin. My filters "

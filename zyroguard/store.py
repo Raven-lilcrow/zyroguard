@@ -1274,6 +1274,34 @@ class Store:
         )
         return [self._row_to_audit(r) for r in await cur.fetchall()]
 
+    # Real bans only: shadow-mode "would ban" rows and bans reversed with /undo don't count.
+    _BANNED = "chat_id=? AND action='ban' AND mode='enforce' AND undone_at IS NULL AND user_id IS NOT NULL"
+
+    async def banned_count(self, chat_id: int) -> int:
+        """How many different people I banned in this group."""
+        cur = await self.db.execute(f"SELECT COUNT(DISTINCT user_id) FROM audit WHERE {self._BANNED}", (chat_id,))
+        row = await cur.fetchone()
+        return int(row[0]) if row else 0
+
+    async def banned_users(self, chat_id: int, limit: int = 20, offset: int = 0) -> list[sqlite3.Row]:
+        """Everyone I banned in this group, one row per person with their latest ban, newest first.
+
+        `username` is the newest name we have for them (the members table first, then the name
+        saved with the ban), `times` how often they were banned, `lift_done` whether a timed
+        ban was already lifted (by the clock or by /unban)."""
+        cur = await self.db.execute(
+            "WITH last AS (SELECT user_id, MAX(id) AS id, COUNT(*) AS times FROM audit "
+            f"WHERE {self._BANNED} GROUP BY user_id) "
+            "SELECT a.id, a.user_id, a.ts, a.reason, a.source, a.duration_s, a.expires_at, last.times, "
+            "COALESCE(NULLIF(m.username, ''), a.username) AS username, m.display_name, "
+            "(SELECT t.done FROM timed_actions t WHERE t.audit_id=a.id ORDER BY t.id DESC LIMIT 1) AS lift_done "
+            "FROM last JOIN audit a ON a.id=last.id "
+            "LEFT JOIN members m ON m.chat_id=a.chat_id AND m.user_id=a.user_id "
+            "ORDER BY a.id DESC LIMIT ? OFFSET ?",
+            (chat_id, limit, offset),
+        )
+        return list(await cur.fetchall())
+
     async def audit_since(self, chat_id: int | None, since: datetime) -> list[AuditRow]:
         if chat_id is None:
             cur = await self.db.execute(
