@@ -9,6 +9,7 @@ from __future__ import annotations
 import html
 import re
 from datetime import datetime, timedelta
+from typing import Any
 
 
 from aiogram import F, Router
@@ -157,14 +158,43 @@ def args(command: CommandObject) -> list[str]:
     return (command.args or "").split()
 
 
+def _picked_user(m: Message) -> tuple[Any, list[str]] | None:
+    """A member chosen from Telegram's @ autocomplete who has no username: the client sends their
+    display name with a text_mention entity carrying the user. Must be the first word after the
+    command. Returns (user, the words after the name), offsets counted in UTF-16 units."""
+    text = m.text or ""
+    u16 = text.encode("utf-16-le")
+    for ent in m.entities or []:
+        if ent.type != "text_mention" or not ent.user or not ent.offset:
+            continue
+        if len(u16[:ent.offset * 2].decode("utf-16-le").split()) != 1:
+            continue
+        return ent.user, u16[(ent.offset + ent.length) * 2:].decode("utf-16-le").split()
+    return None
+
+
+def missing_target_text(command: CommandObject, tokens: list[str], *, tail: str = "") -> str:
+    """Why no user was found, in words that say what to do instead."""
+    if tokens and tokens[0].startswith("@"):
+        return (f"I have not seen {html.escape(tokens[0])} write in this group yet, so I cannot find them by name. "
+                "Reply to one of their messages instead, or use their id from /id.")
+    return f"Reply to the user's message with /{command.command}, or write /{command.command} @username.{tail}"
+
+
 async def resolve_target(m: Message, app: App, tokens: list[str]) -> tuple[Target | None, list[str]]:
-    """Reply target, else @username / numeric id from the first token. In a forum topic the
-    automatic reply to the topic header does not count as a reply."""
+    """Reply target, else @username / numeric id from the first token, else a member picked from the
+    @ autocomplete without a username. In a forum topic the automatic reply to the topic header does
+    not count as a reply."""
     r = real_reply(m)
     if r and r.from_user and r.from_user.id not in SERVICE_ACCOUNTS:
         u = r.from_user
         return Target(cid(m, app), u.id, u.username, u.full_name, r.message_id,
                       r.text or r.caption, None, await chat_title(m, app), thread_of(m)), tokens
+    picked = _picked_user(m)
+    if picked:
+        u, rest = picked
+        return Target(cid(m, app), u.id, u.username, u.full_name, chat_title=await chat_title(m, app),
+                      thread_id=thread_of(m)), rest
     if not tokens:
         return None, tokens
     tok = tokens[0]
@@ -242,13 +272,8 @@ async def _manual(m: Message, app: App, command: CommandObject, action: str, *, 
         return
     target, rest = await resolve_target(m, app, args(command))
     if not target or not target.user_id:
-        toks = args(command)
-        if toks and toks[0].startswith("@"):
-            await reply_temp(m, app, f"I have not seen {html.escape(toks[0])} write in this group yet, so I cannot find them by name. "
-                           "Reply to one of their messages instead, or use their id from /id.")
-        else:
-            tail = f"\n{HELP_TEXT}" if action in {"mute", "ban"} else ""
-            await reply_temp(m, app, f"Reply to the user's message with /{command.command}, or write /{command.command} @username.{tail}")
+        tail = f"\n{HELP_TEXT}" if action in {"mute", "ban"} else ""
+        await reply_temp(m, app, missing_target_text(command, args(command), tail=tail))
         return
     if await app.admins.is_admin(cid(m, app), target.user_id):
         await reply_temp(m, app, "That user is an admin, so I will not touch them.")
@@ -350,7 +375,7 @@ async def cmd_strikes(m: Message, app: App, command: CommandObject) -> None:
         return
     target, _ = await resolve_target(m, app, args(command))
     if not target or not target.user_id:
-        await reply(m, "Reply to the user or give @username / id.")
+        await reply(m, missing_target_text(command, args(command)))
         return
     rows = await app.store.list_strikes(cid(m, app), target.user_id)
     title = html.escape(await chat_title(m, app) or str(cid(m, app)))
@@ -371,7 +396,8 @@ async def cmd_strikes(m: Message, app: App, command: CommandObject) -> None:
     nxt = app.enforcer._next_step(cs, n)
     lines.append("")
     lines.append(f"Next strike: {nxt}" if nxt else "Next strike: the same again")
-    lines.append(f"Clear them: <code>/pardon {who(target)}</code>")
+    handle = f"@{target.username}" if target.username else str(target.user_id)   # a display name cannot be typed back
+    lines.append(f"Clear them: <code>/pardon {handle}</code>")
     await reply(m, "\n".join(lines))
 
 
@@ -381,7 +407,7 @@ async def cmd_pardon(m: Message, app: App, command: CommandObject) -> None:
         return
     target, _ = await resolve_target(m, app, args(command))
     if not target or not target.user_id:
-        await reply_temp(m, app, "Reply to the user or give @username / id.")
+        await reply_temp(m, app, missing_target_text(command, args(command)))
         return
     n = await app.store.clear_strikes(cid(m, app), target.user_id)
     await reply_temp(m, app, f"<b>Cleared {n} strike(s) for {who(target)}.</b> They start fresh.")
